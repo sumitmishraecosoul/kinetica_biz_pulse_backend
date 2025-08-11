@@ -1454,3 +1454,14 @@
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mReturning cached CSV data\u001b[39m","timestamp":"2025-08-11 11:45:05:455"}
 {"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mCache set: business_areas_{} (TTL: 1800s)\u001b[39m","timestamp":"2025-08-11 11:45:05:455"}
 {"level":"\u001b[35mhttp\u001b[39m","message":"\u001b[35mGET /api/v1/dashboard/business-areas 200 52ms\u001b[39m","timestamp":"2025-08-11 11:45:05:455"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mUsing in-memory cache (Redis not available)\u001b[39m","timestamp":"2025-08-11 12:55:22:5522"}
+{"accountName":"kineticadbms","blobFolder":"Biz-Pulse","containerName":"thrive-worklytics","csvFileName":"Front Office Flash - YTD.csv","level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mAzure Service initialized with:\u001b[39m","timestamp":"2025-08-11 12:55:22:5522"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mTesting Azure connection...\u001b[39m","timestamp":"2025-08-11 12:55:22:5522"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mAzure connection successful. Found 6 blobs in container.\u001b[39m","timestamp":"2025-08-11 12:55:23:5523"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mCache miss: csv_data\u001b[39m","timestamp":"2025-08-11 12:55:23:5523"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mFetching CSV data from Azure Blob Storage\u001b[39m","timestamp":"2025-08-11 12:55:23:5523"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mChecking if blob exists: Biz-Pulse/Front Office Flash - YTD.csv\u001b[39m","timestamp":"2025-08-11 12:55:23:5523"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mBlob exists, proceeding to download\u001b[39m","timestamp":"2025-08-11 12:55:23:5523"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSuccessfully parsed 36269 rows from CSV\u001b[39m","timestamp":"2025-08-11 12:55:26:5526"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mCache set: csv_data (TTL: 3600s)\u001b[39m","timestamp":"2025-08-11 12:55:26:5526"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mCache set: test (TTL: 60s)\u001b[39m","timestamp":"2025-08-11 12:55:26:5526"}
