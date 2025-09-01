@@ -1,0 +1,5 @@
+@'
+regex:AZURE_STORAGE_CONNECTION_STRING=.*=>AZURE_STORAGE_CONNECTION_STRING=REDACTED
+regex:AccountKey=[A-Za-z0-9+/=]+=>AccountKey=REDACTED
+regex:DefaultEndpointsProtocol=https;AccountName=kineticadbms;AccountKey=[A-Za-z0-9+/=]+;EndpointSuffix=core\.windows\.net=>DefaultEndpointsProtocol=https;AccountName=kineticadbms;AccountKey=REDACTED;EndpointSuffix=core.windows.net
+'@ | Set-Content -Encoding utf8 replacements.txt

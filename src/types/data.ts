@@ -54,6 +54,11 @@ export interface DataFilters {
   period?: string;
   limit?: number;
   offset?: number;
+  // RLS filters
+  allowedBusinessAreas?: string[];
+  allowedChannels?: string[];
+  allowedBrands?: string[];
+  allowedCustomers?: string[];
 }
 
 // Aggregated data interfaces
@@ -65,6 +70,9 @@ export interface AggregatedData {
   growthRate: number;
   topPerformers: TopPerformer[];
   riskItems: RiskItem[];
+  uniqueCustomers?: number;
+  uniqueBrands?: number;
+  uniqueCategories?: number;
 }
 
 export interface TopPerformer {
@@ -81,6 +89,24 @@ export interface RiskItem {
   riskLevel: 'high' | 'medium' | 'low';
   reason: string;
   trend: number;
+}
+
+// Pagination interfaces
+export interface PaginationParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+    totalPages: number;
+    currentPage: number;
+  };
 }
 
 // Business dimensions
@@ -160,6 +186,7 @@ export interface TrendAnalysis {
   change: number;
   changePercent: number;
 }
+
 
 
 

@@ -4,24 +4,41 @@ import { Readable } from 'stream';
 import { SalesData } from '@/types/data';
 import { logger } from '@/utils/logger';
 import { cacheService } from '@/services/cacheService';
+import Joi from 'joi';
 
 export class AzureService {
   private blobServiceClient: BlobServiceClient;
   private containerName: string;
   private blobFolder: string;
   private csvFileName: string;
+  private lastFetchMeta: { source: 'azure' | 'cache'; rowCount: number; lastUpdated: string } = {
+    source: 'azure',
+    rowCount: 0,
+    lastUpdated: ''
+  };
+  private rowSchema = Joi.object({
+    Year: Joi.alternatives(Joi.string().regex(/^\d{4}$/), Joi.number().integer().min(2000).max(2100)).required(),
+    'Month Name': Joi.string().required(), // Allow any month name format
+    Business: Joi.string().allow('').optional(),
+    Channel: Joi.string().allow('').optional(),
+    Brand: Joi.string().allow('').optional(),
+    Category: Joi.string().allow('').optional(),
+    Customer: Joi.string().allow('').optional(),
+    gSales: Joi.alternatives(Joi.string(), Joi.number(), Joi.allow(null)).optional(),
+    fGP: Joi.alternatives(Joi.string(), Joi.number(), Joi.allow(null)).optional(),
+    'Group Cost': Joi.alternatives(Joi.string(), Joi.number(), Joi.allow(null)).optional(),
+    Cases: Joi.alternatives(Joi.string(), Joi.number(), Joi.allow(null)).optional()
+  }).unknown(true);
 
   constructor() {
-    // Hardcoded Azure credentials for debugging
+    // Hardcoded Azure credentials for debugging (temporary)
     const connectionString = 'DefaultEndpointsProtocol=https;AccountName=kineticadbms;AccountKey=JfMzO69p3Ip+Sz+YkXxp7sHxZw0O/JunSaS5qKnSSQnxk1lPhwiQwnGyyJif7sGB01l9amAdvU/t+ASthIK/ZQ==;EndpointSuffix=core.windows.net';
-    
     this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     this.containerName = 'thrive-worklytics';
     this.blobFolder = 'Biz-Pulse';
     this.csvFileName = 'Front Office Flash - YTD.csv';
-    
-    // Debug: Log the configuration
-    logger.info('Azure Service initialized with:', {
+
+    logger.info('Azure Service initialized', {
       containerName: this.containerName,
       blobFolder: this.blobFolder,
       csvFileName: this.csvFileName,
@@ -39,6 +56,11 @@ export class AzureService {
     const cachedData = await cacheService.get(cacheKey);
     if (cachedData && Array.isArray(cachedData)) {
       logger.info('Returning cached CSV data');
+      this.lastFetchMeta = {
+        source: 'cache',
+        rowCount: (cachedData as SalesData[]).length,
+        lastUpdated: new Date().toISOString()
+      };
       return cachedData as SalesData[];
     }
 
@@ -72,6 +94,11 @@ export class AzureService {
           .pipe(csv())
           .on('data', (row: any) => {
             // Transform and validate data
+            const { error } = this.rowSchema.validate(row, { abortEarly: false });
+            if (error) {
+              logger.warn('Row validation failed; skipping row', { details: error.details?.map(d => d.message).slice(0,3) });
+              return;
+            }
             const transformedRow = this.transformCSVRow(row);
             if (transformedRow) {
               data.push(transformedRow);
@@ -82,6 +109,11 @@ export class AzureService {
             
             // Cache the data
             await cacheService.set(cacheKey, data, 3600); // Cache for 1 hour
+            this.lastFetchMeta = {
+              source: 'azure',
+              rowCount: data.length,
+              lastUpdated: new Date().toISOString()
+            };
             
             resolve(data);
           })
@@ -95,6 +127,10 @@ export class AzureService {
       logger.error('Error fetching CSV data from Azure:', error);
       throw error;
     }
+  }
+
+  getLastFetchMeta(): { source: 'azure' | 'cache'; rowCount: number; lastUpdated: string } {
+    return this.lastFetchMeta;
   }
 
   /**
@@ -223,17 +259,16 @@ export class AzureService {
     try {
       logger.info('Testing Azure connection...');
       const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
-      
-      // Try to list blobs in the container to test connection
-      const blobs = containerClient.listBlobsFlat();
-      let blobCount = 0;
-      for await (const blob of blobs) {
-        blobCount++;
-        if (blobCount > 5) break; // Just check first 5 blobs
+      // Try minimal list to validate auth without requiring a specific blob
+      const iter = containerClient.listBlobsFlat().byPage({ maxPageSize: 1 });
+      const page = await iter.next();
+      const ok = !page.done; // if we got a page (even empty), auth succeeded
+      if (ok) {
+        logger.info('Azure connection successful');
+        return true;
       }
-      
-      logger.info(`Azure connection successful. Found ${blobCount} blobs in container.`);
-      return true;
+      logger.warn('Azure connection test returned no pages');
+      return false;
     } catch (error) {
       logger.error('Azure connection test failed:', error);
       return false;

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "7e3f89d3-acb9-48fc-8cc1-a5425e5545a0",
+    "email": "sumitmishraecosoul@gmail.com",
+    "passwordHash": "$2a$10$c.kCYdrL/DNdhDRV0j65NeT7y8yIB1Whs.h1c1gkICPBSSuRV3yUq",
+    "roles": [
+      "user"
+    ],
+    "createdAt": "2025-08-14T10:38:30.942Z",
+    "updatedAt": "2025-08-14T10:38:30.942Z"
+  },
+  {
+    "id": "40a6f24f-5b09-4c0e-9288-c19c552f48b9",
+    "email": "sumit.mishra@ecosoulhome.com",
+    "passwordHash": "$2a$10$tuyov6XSACU0ZkjmASAhJ.5lULhUg7IIqAo5DjYA77JGSbs2tIpD2",
+    "roles": [
+      "user"
+    ],
+    "createdAt": "2025-08-27T11:13:39.032Z",
+    "updatedAt": "2025-08-27T11:13:39.032Z"
+  }
+]

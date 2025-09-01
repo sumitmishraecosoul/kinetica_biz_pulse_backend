@@ -1,12 +1,23 @@
-// import dotenv from 'dotenv';
-// import path from 'path';
+import dotenv from 'dotenv';
+import path from 'path';
 
 // Load environment variables FIRST, before any other imports
-// dotenv.config({ path: path.join(__dirname, '../.env') });
+// Try multiple common .env locations (later loads override earlier)
+const envCandidates = [
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), 'server/.env'),
+  path.join(__dirname, '../.env')
+];
+for (const p of envCandidates) {
+  const loaded = dotenv.config({ path: p, override: true });
+  if (loaded.parsed) {
+    console.log(`Loaded env from: ${p}`);
+  }
+}
 
-// Debug: Check if environment variables are loaded
+// Debug: Check if environment variables are loaded (mask secrets)
 console.log('Environment check:');
-console.log('AZURE_STORAGE_CONNECTION_STRING:', 'HARDCODED FOR DEBUGGING');
+console.log('AZURE_STORAGE_CONNECTION_STRING set:', Boolean(process.env.AZURE_STORAGE_CONNECTION_STRING));
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', process.env.PORT);
 
@@ -22,9 +33,12 @@ import { requestLogger, errorLogger } from '@/utils/logger';
 
 // Import routes
 import dashboardRoutes from '@/routes/dashboard';
+import authRoutes from '@/routes/auth';
+import userRoutes from '@/routes/users';
 
 // Import services
 import { cacheService } from '@/services/cacheService';
+import { authMiddleware } from '@/middleware/auth';
 import { getAzureService } from '@/services/azureService';
 
 const app = express();
@@ -45,30 +59,30 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration
+// CORS configuration - More permissive for development
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: true, // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-roles', 'x-allowed-business-areas', 'x-allowed-channels', 'x-allowed-brands', 'x-allowed-customers']
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    error: {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: 'Too many requests from this IP, please try again later.'
-    }
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Rate limiting - DISABLED for development to prevent access issues
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minute
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '10000'), // limit each IP to 10000 requests per minute (increased)
+//   message: {
+//     success: false,
+//     error: {
+//       code: 'RATE_LIMIT_EXCEEDED',
+//       message: 'Too many requests from this IP, please try again later.'
+//     }
+//   },
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
 
-app.use('/api/', limiter);
+// app.use('/api/', limiter);
 
 // Compression middleware
 app.use(compression());
@@ -80,6 +94,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Logging middleware
 app.use(morgan('combined'));
 app.use(requestLogger);
+// Auth (RLS) middleware
+app.use(authMiddleware);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -93,7 +109,9 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/users', userRoutes);
 
 // Root endpoint
 app.get('/api/v1', (req, res) => {
@@ -154,19 +172,20 @@ process.on('SIGINT', async () => {
 // Start server
 const startServer = async () => {
   try {
-    // Test Azure connection
+    // Test Azure connection (non-fatal)
     console.log('Testing Azure connection...');
     const azureService = getAzureService();
-    
-    // First test basic connection
     const connectionTest = await azureService.testConnection();
     if (!connectionTest) {
-      throw new Error('Failed to connect to Azure Blob Storage');
+      console.warn('⚠️ Azure connection test failed. Server will still start; endpoints may return errors until Azure is configured.');
+    } else {
+      try {
+        await azureService.getDataSummary(); // warm cache
+        console.log('✅ Azure connection successful');
+      } catch (e) {
+        console.warn('⚠️ Unable to prefetch data summary. Continuing to start server.', e);
+      }
     }
-    
-    // Then try to get data summary
-    await azureService.getDataSummary();
-    console.log('✅ Azure connection successful');
 
     // Test cache connection
     console.log('Testing cache connection...');

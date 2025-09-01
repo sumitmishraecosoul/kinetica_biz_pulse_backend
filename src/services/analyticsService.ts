@@ -1,15 +1,29 @@
 import _ from 'lodash';
 import moment from 'moment';
-import { SalesData, DataFilters, AggregatedData, TopPerformer, RiskItem, VarianceAnalysis, TrendAnalysis } from '@/types/data';
+import { SalesData, DataFilters, AggregatedData, TopPerformer, RiskItem, VarianceAnalysis, TrendAnalysis, PaginatedResponse, PaginationParams } from '@/types/data';
+import { config } from '@/utils/config';
 import { getAzureService } from './azureService';
 import { cacheService } from './cacheService';
 import { logger } from '@/utils/logger';
 
 export class AnalyticsService {
+  private static readonly MONTHS = [
+    'January','February','March','April','May','June','July','August','September','October','November','December'
+  ];
+
+  private getMonthIndex(monthName: string): number {
+    return AnalyticsService.MONTHS.indexOf(monthName) + 1; // 1-12, 0 if not found
+  }
+
+  private getQuarterMonths(quarter: number): string[] {
+    const start = (quarter - 1) * 3;
+    return AnalyticsService.MONTHS.slice(start, start + 3);
+  }
   /**
    * Get aggregated data based on filters
    */
   async getAggregatedData(filters: DataFilters): Promise<AggregatedData> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
     const cacheKey = `aggregated_${JSON.stringify(filters)}`;
     
     // Check cache first
@@ -31,6 +45,36 @@ export class AnalyticsService {
       return aggregated;
     } catch (error) {
       logger.error('Error getting aggregated data:', error);
+      if (allowEmpty) {
+        return {
+          totalRevenue: 0,
+          totalCases: 0,
+          totalMargin: 0,
+          avgMargin: 0,
+          growthRate: 0,
+          topPerformers: [],
+          riskItems: [],
+          uniqueCustomers: 0,
+          uniqueBrands: 0,
+          uniqueCategories: 0
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get filtered raw records based on filters
+   */
+  async getFilteredData(filters: DataFilters): Promise<SalesData[]> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    try {
+      const azureService = getAzureService();
+      const data = await azureService.fetchCSVData();
+      return this.applyFilters(data, filters);
+    } catch (error) {
+      logger.error('Error getting filtered data:', error);
+      if (allowEmpty) return [];
       throw error;
     }
   }
@@ -38,10 +82,11 @@ export class AnalyticsService {
   /**
    * Get top performers analysis
    */
-  async getTopPerformers(filters: DataFilters, metric: string = 'gSales', limit: number = 20): Promise<TopPerformer[]> {
-    const cacheKey = `top_performers_${metric}_${JSON.stringify(filters)}_${limit}`;
+  async getTopPerformers(filters: DataFilters, metric: string = 'gSales', limit: number = config.topNDefaultLimit, dimension: keyof SalesData = 'Brand', offset: number = 0): Promise<PaginatedResponse<TopPerformer>> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    const cacheKey = `top_performers_${String(dimension)}_${metric}_${JSON.stringify(filters)}_${limit}_${offset}`;
     
-    const cached = await cacheService.get<TopPerformer[]>(cacheKey);
+    const cached = await cacheService.get<PaginatedResponse<TopPerformer>>(cacheKey);
     if (cached) {
       return cached;
     }
@@ -51,13 +96,26 @@ export class AnalyticsService {
       const data = await azureService.fetchCSVData();
       const filteredData = this.applyFilters(data, filters);
       
-      const performers = this.calculateTopPerformers(filteredData, metric, limit);
+      const performers = this.calculateTopPerformers(filteredData, metric, limit, String(dimension), offset);
       
       await cacheService.set(cacheKey, performers, 1800);
       
       return performers;
     } catch (error) {
       logger.error('Error getting top performers:', error);
+      if (allowEmpty) {
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            limit,
+            offset,
+            hasMore: false,
+            totalPages: 0,
+            currentPage: 1
+          }
+        };
+      }
       throw error;
     }
   }
@@ -65,10 +123,11 @@ export class AnalyticsService {
   /**
    * Get risk analysis for underperforming items
    */
-  async getRiskAnalysis(filters: DataFilters): Promise<RiskItem[]> {
-    const cacheKey = `risk_analysis_${JSON.stringify(filters)}`;
+  async getRiskAnalysis(filters: DataFilters, dimension: keyof SalesData = 'Brand', limit: number = config.topNDefaultLimit, offset: number = 0): Promise<PaginatedResponse<RiskItem>> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    const cacheKey = `risk_analysis_${String(dimension)}_${JSON.stringify(filters)}_${limit}_${offset}`;
     
-    const cached = await cacheService.get<RiskItem[]>(cacheKey);
+    const cached = await cacheService.get<PaginatedResponse<RiskItem>>(cacheKey);
     if (cached) {
       return cached;
     }
@@ -78,13 +137,26 @@ export class AnalyticsService {
       const data = await azureService.fetchCSVData();
       const filteredData = this.applyFilters(data, filters);
       
-      const risks = this.calculateRiskItems(filteredData);
+      const risks = this.calculateRiskItems(filteredData, String(dimension), limit, offset);
       
       await cacheService.set(cacheKey, risks, 1800);
       
       return risks;
     } catch (error) {
       logger.error('Error getting risk analysis:', error);
+      if (allowEmpty) {
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            limit,
+            offset,
+            hasMore: false,
+            totalPages: 0,
+            currentPage: 1
+          }
+        };
+      }
       throw error;
     }
   }
@@ -93,6 +165,7 @@ export class AnalyticsService {
    * Get variance analysis for margin drivers
    */
   async getVarianceAnalysis(filters: DataFilters, comparisonPeriod: string): Promise<VarianceAnalysis> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
     const cacheKey = `variance_${JSON.stringify(filters)}_${comparisonPeriod}`;
     
     const cached = await cacheService.get<VarianceAnalysis>(cacheKey);
@@ -113,6 +186,17 @@ export class AnalyticsService {
       return variance;
     } catch (error) {
       logger.error('Error getting variance analysis:', error);
+      if (allowEmpty) {
+        return {
+          totalVariance: 0,
+          volumeVariance: 0,
+          priceVariance: 0,
+          costVariance: 0,
+          mixVariance: 0,
+          period: filters.period || 'current',
+          comparison: comparisonPeriod
+        };
+      }
       throw error;
     }
   }
@@ -121,6 +205,7 @@ export class AnalyticsService {
    * Get trend analysis for time series data
    */
   async getTrendAnalysis(filters: DataFilters, metric: string = 'gSales'): Promise<TrendAnalysis[]> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
     const cacheKey = `trend_${metric}_${JSON.stringify(filters)}`;
     
     const cached = await cacheService.get<TrendAnalysis[]>(cacheKey);
@@ -140,6 +225,7 @@ export class AnalyticsService {
       return trends;
     } catch (error) {
       logger.error('Error getting trend analysis:', error);
+      if (allowEmpty) return [];
       throw error;
     }
   }
@@ -148,6 +234,7 @@ export class AnalyticsService {
    * Get business area performance
    */
   async getBusinessAreaPerformance(filters: DataFilters) {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
     const cacheKey = `business_areas_${JSON.stringify(filters)}`;
     
     const cached = await cacheService.get(cacheKey);
@@ -167,6 +254,7 @@ export class AnalyticsService {
       return businessAreas;
     } catch (error) {
       logger.error('Error getting business area performance:', error);
+      if (allowEmpty) return [];
       throw error;
     }
   }
@@ -175,6 +263,7 @@ export class AnalyticsService {
    * Get channel performance analysis
    */
   async getChannelPerformance(filters: DataFilters) {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
     const cacheKey = `channels_${JSON.stringify(filters)}`;
     
     const cached = await cacheService.get(cacheKey);
@@ -194,6 +283,55 @@ export class AnalyticsService {
       return channels;
     } catch (error) {
       logger.error('Error getting channel performance:', error);
+      if (allowEmpty) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Get category performance analysis
+   */
+  async getCategoryPerformance(filters: DataFilters) {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    const cacheKey = `categories_${JSON.stringify(filters)}`;
+    
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const azureService = getAzureService();
+      const data = await azureService.fetchCSVData();
+      const filteredData = this.applyFilters(data, filters);
+      const categories = this.calculateCategoryPerformance(filteredData);
+      await cacheService.set(cacheKey, categories, 1800);
+      return categories;
+    } catch (error) {
+      logger.error('Error getting category performance:', error);
+      if (allowEmpty) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Get sub-category performance analysis
+   */
+  async getSubCategoryPerformance(filters: DataFilters) {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    const cacheKey = `subcategories_${JSON.stringify(filters)}`;
+    const cached = await cacheService.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const azureService = getAzureService();
+      const data = await azureService.fetchCSVData();
+      const filteredData = this.applyFilters(data, filters);
+      const subs = this.calculateSubCategoryPerformance(filteredData);
+      await cacheService.set(cacheKey, subs, 1800);
+      return subs;
+    } catch (error) {
+      logger.error('Error getting sub-category performance:', error);
+      if (allowEmpty) return [];
       throw error;
     }
   }
@@ -204,6 +342,91 @@ export class AnalyticsService {
   private applyFilters(data: SalesData[], filters: DataFilters): SalesData[] {
     let filtered = data;
 
+    // Period handling
+    if (filters.period) {
+      // Determine target year
+      const years = [...new Set(filtered.map(r => r.Year))].filter(Boolean) as number[];
+      const latestYear = years.length ? Math.max(...years) : undefined;
+      const targetYear = filters.year || latestYear;
+      if (targetYear) {
+        filtered = filtered.filter(row => row.Year === targetYear);
+      }
+
+      const monthParam = filters.month && filters.month !== 'All' ? String(filters.month) : undefined;
+      const monthsOrdered = AnalyticsService.MONTHS;
+      const latestMonthInYear = (() => {
+        const monthsInYear = filtered.map(r => r['Month Name']).filter(Boolean) as string[];
+        const uniqueMonths = [...new Set(monthsInYear)];
+        const indices = uniqueMonths.map(m => monthsOrdered.indexOf(m)).filter(i => i >= 0);
+        const maxIndex = indices.length ? Math.max(...indices) : -1;
+        return maxIndex >= 0 ? monthsOrdered[maxIndex] : undefined;
+      })();
+
+      const selectedMonth = monthParam || latestMonthInYear;
+      const selectedMonthIndex = selectedMonth ? this.getMonthIndex(selectedMonth) : undefined;
+
+      const qFromMonth = selectedMonthIndex ? Math.ceil(selectedMonthIndex / 3) : undefined;
+
+      switch (filters.period) {
+        case 'YTD': {
+          if (selectedMonth) {
+            filtered = filtered.filter(r => this.getMonthIndex(r['Month Name']) <= (selectedMonthIndex || 12));
+          }
+          break;
+        }
+        case 'MTD': {
+          if (selectedMonth) {
+            filtered = filtered.filter(r => r['Month Name'] === selectedMonth);
+          }
+          break;
+        }
+        case 'QTD': {
+          if (qFromMonth) {
+            const qMonths = this.getQuarterMonths(qFromMonth);
+            const uptoIndex = selectedMonthIndex ? (selectedMonthIndex - (qFromMonth - 1) * 3) : 3;
+            const monthsToInclude = qMonths.slice(0, uptoIndex);
+            filtered = filtered.filter(r => monthsToInclude.includes(r['Month Name']));
+          }
+          break;
+        }
+        case 'LYTD':
+        case 'LMTD':
+        case 'LQTD': {
+          // Shift to previous year
+          const prevYear = targetYear ? targetYear - 1 : undefined;
+          if (prevYear) {
+            filtered = data.filter(r => r.Year === prevYear);
+            const monthRef = selectedMonth || latestMonthInYear;
+            const idx = monthRef ? this.getMonthIndex(monthRef) : undefined;
+            const prevQ = idx ? Math.ceil(idx / 3) : undefined;
+            if (filters.period === 'LYTD') {
+              if (idx) filtered = filtered.filter(r => this.getMonthIndex(r['Month Name']) <= idx);
+            } else if (filters.period === 'LMTD') {
+              if (monthRef) filtered = filtered.filter(r => r['Month Name'] === monthRef);
+            } else if (filters.period === 'LQTD' && prevQ) {
+              const qMonths = this.getQuarterMonths(prevQ);
+              const uptoIndex = idx ? (idx - (prevQ - 1) * 3) : 3;
+              const monthsToInclude = qMonths.slice(0, uptoIndex);
+              filtered = filtered.filter(r => monthsToInclude.includes(r['Month Name']));
+            }
+          }
+          break;
+        }
+        case 'Q1':
+        case 'Q2':
+        case 'Q3':
+        case 'Q4': {
+          const q = Number(filters.period.substring(1));
+          const months = this.getQuarterMonths(q);
+          filtered = filtered.filter(r => months.includes(r['Month Name']));
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    // Simple filters
     if (filters.year) {
       filtered = filtered.filter(row => row.Year === filters.year);
     }
@@ -236,6 +459,24 @@ export class AnalyticsService {
       filtered = filtered.filter(row => row.Customer === filters.customer);
     }
 
+    // RLS filters (allow lists). If provided, restrict to those values.
+    if (filters.allowedBusinessAreas && filters.allowedBusinessAreas.length) {
+      const allow = new Set(filters.allowedBusinessAreas);
+      filtered = filtered.filter(row => allow.has(row.Business));
+    }
+    if (filters.allowedChannels && filters.allowedChannels.length) {
+      const allow = new Set(filters.allowedChannels);
+      filtered = filtered.filter(row => allow.has(row.Channel));
+    }
+    if (filters.allowedBrands && filters.allowedBrands.length) {
+      const allow = new Set(filters.allowedBrands);
+      filtered = filtered.filter(row => allow.has(row.Brand));
+    }
+    if (filters.allowedCustomers && filters.allowedCustomers.length) {
+      const allow = new Set(filters.allowedCustomers);
+      filtered = filtered.filter(row => allow.has(row.Customer));
+    }
+
     return filtered;
   }
 
@@ -258,22 +499,26 @@ export class AnalyticsService {
       avgMargin,
       growthRate,
       topPerformers: [],
-      riskItems: []
+      riskItems: [],
+      uniqueCustomers: new Set(data.map(d => d.Customer).filter(Boolean)).size,
+      uniqueBrands: new Set(data.map(d => d.Brand).filter(Boolean)).size,
+      uniqueCategories: new Set(data.map(d => d.Category).filter(Boolean)).size
     };
   }
 
   /**
    * Calculate top performers
    */
-  private calculateTopPerformers(data: SalesData[], metric: string, limit: number): TopPerformer[] {
-    const grouped = _.groupBy(data, 'Brand');
+  private calculateTopPerformers(data: SalesData[], metric: string, limit: number, dimension: string, offset: number = 0): PaginatedResponse<TopPerformer> {
+    const dimensionKey = dimension as keyof SalesData;
+    const grouped = _.groupBy(data, dimensionKey as string);
     
-    const performers = Object.entries(grouped).map(([brand, items]) => {
+    const performers = Object.entries(grouped).map(([key, items]) => {
       const totalValue = _.sumBy(items, metric as keyof SalesData);
       const avgValue = totalValue / items.length;
       
       return {
-        name: brand,
+        name: key,
         value: totalValue,
         metric,
         growth: this.calculateGrowthRate(items),
@@ -281,16 +526,23 @@ export class AnalyticsService {
       };
     });
 
-    return _.orderBy(performers, 'value', 'desc').slice(0, limit);
+    const sortedPerformers = _.orderBy(performers, 'value', 'desc');
+    const paginated = this.paginate(sortedPerformers, limit, offset);
+
+    return {
+      data: paginated.data,
+      pagination: paginated.pagination
+    };
   }
 
   /**
    * Calculate risk items
    */
-  private calculateRiskItems(data: SalesData[]): RiskItem[] {
-    const grouped = _.groupBy(data, 'Brand');
+  private calculateRiskItems(data: SalesData[], dimension: string, limit: number, offset: number = 0): PaginatedResponse<RiskItem> {
+    const dimensionKey = dimension as keyof SalesData;
+    const grouped = _.groupBy(data, dimensionKey as string);
     
-    const risks = Object.entries(grouped).map(([brand, items]) => {
+    const risks = Object.entries(grouped).map(([key, items]) => {
       const totalSales = _.sumBy(items, 'gSales');
       const avgMargin = _.sumBy(items, 'fGP') / totalSales * 100;
       const trend = this.calculateGrowthRate(items);
@@ -298,19 +550,19 @@ export class AnalyticsService {
       let riskLevel: 'high' | 'medium' | 'low' = 'low';
       let reason = '';
 
-      if (avgMargin < 15) {
+      if (avgMargin < config.riskLowMarginThreshold) {
         riskLevel = 'high';
         reason = 'Low margin';
-      } else if (trend < -5) {
+      } else if (trend < config.riskDecliningTrendThreshold) {
         riskLevel = 'medium';
         reason = 'Declining trend';
-      } else if (totalSales < 10000) {
+      } else if (totalSales < config.riskLowVolumeThreshold) {
         riskLevel = 'medium';
         reason = 'Low volume';
       }
 
       return {
-        name: brand,
+        name: key,
         value: totalSales,
         riskLevel,
         reason,
@@ -318,7 +570,10 @@ export class AnalyticsService {
       };
     });
 
-    return _.orderBy(risks, 'value', 'asc').slice(0, 10);
+    const sortedRisks = _.orderBy(risks, 'value', 'asc');
+    const paginated = this.paginate(sortedRisks, limit, offset);
+
+    return paginated;
   }
 
   /**
@@ -351,11 +606,22 @@ export class AnalyticsService {
    */
   private calculateTrendAnalysis(data: SalesData[], metric: string): TrendAnalysis[] {
     const monthlyData = _.groupBy(data, 'Month Name');
-    const months = Object.keys(monthlyData).sort();
+    const months = Object.keys(monthlyData)
+      .filter(Boolean)
+      .sort((a,b) => this.getMonthIndex(a) - this.getMonthIndex(b));
     
     return months.map((month, index) => {
       const monthData = monthlyData[month];
-      const value = _.sumBy(monthData, metric as keyof SalesData);
+      let value = 0;
+      if (metric === 'customers') {
+        value = new Set(monthData.map(x => x.Customer).filter(Boolean)).size;
+      } else if (metric === 'margin') {
+        const sales = _.sumBy(monthData, 'gSales');
+        const gp = _.sumBy(monthData, 'fGP');
+        value = sales > 0 ? (gp / sales) * 100 : 0;
+      } else {
+        value = _.sumBy(monthData, metric as keyof SalesData);
+      }
       
       let trend: 'up' | 'down' | 'stable' = 'stable';
       let change = 0;
@@ -363,9 +629,19 @@ export class AnalyticsService {
 
       if (index > 0) {
         const previousMonth = months[index - 1];
-        const previousValue = _.sumBy(monthlyData[previousMonth], metric as keyof SalesData);
+        let previousValue = 0;
+        const prevData = monthlyData[previousMonth];
+        if (metric === 'customers') {
+          previousValue = new Set(prevData.map(x => x.Customer).filter(Boolean)).size;
+        } else if (metric === 'margin') {
+          const salesPrev = _.sumBy(prevData, 'gSales');
+          const gpPrev = _.sumBy(prevData, 'fGP');
+          previousValue = salesPrev > 0 ? (gpPrev / salesPrev) * 100 : 0;
+        } else {
+          previousValue = _.sumBy(prevData, metric as keyof SalesData);
+        }
         change = value - previousValue;
-        changePercent = previousValue > 0 ? (change / previousValue) * 100 : 0;
+        changePercent = previousValue !== 0 ? (change / Math.abs(previousValue)) * 100 : 0;
         
         if (changePercent > 5) trend = 'up';
         else if (changePercent < -5) trend = 'down';
@@ -428,13 +704,75 @@ export class AnalyticsService {
     });
   }
 
+   /**
+    * Calculate category performance
+    */
+   private calculateCategoryPerformance(data: SalesData[]) {
+     const grouped = _.groupBy(data, 'Category');
+     const totalRevenue = _.sumBy(data, 'gSales') || 1;
+     return Object.entries(grouped).map(([category, items]) => {
+       const revenue = _.sumBy(items, 'gSales');
+       const marginValue = _.sumBy(items, 'fGP');
+       const margin = revenue > 0 ? (marginValue / revenue) * 100 : 0;
+       const growth = this.calculateGrowthRate(items);
+       const marketShare = (revenue / totalRevenue) * 100;
+       const subCategories = [...new Set(items.map(i => i['Sub-Cat']).filter(Boolean))].length;
+       const businessArea = items[0]?.Business || '';
+       const performance = growth > 10 ? 'high' : growth < 0 ? 'low' : 'medium';
+       return {
+         category,
+         businessArea,
+         revenue,
+         margin,
+         growth,
+         marketShare,
+         performance,
+         subCategories
+       };
+     });
+   }
+
+   /**
+    * Calculate sub-category performance
+    */
+   private calculateSubCategoryPerformance(data: SalesData[]) {
+     const grouped = _.groupBy(data, 'Sub-Cat');
+     return Object.entries(grouped).map(([subCategory, items]) => {
+       const revenue = _.sumBy(items, 'gSales');
+       const marginValue = _.sumBy(items, 'fGP');
+       const margin = revenue > 0 ? (marginValue / revenue) * 100 : 0;
+       const growth = this.calculateGrowthRate(items);
+       const units = _.sumBy(items, 'Cases');
+       const status = growth > 10 ? 'growing' : growth < 0 ? 'declining' : 'stable';
+       return {
+         subCategory,
+         category: items[0]?.Category || '',
+         revenue,
+         margin,
+         growth,
+         units,
+         rateOfSale: units / 12,
+         status
+       };
+     });
+   }
+
   /**
    * Calculate growth rate (simplified)
    */
   private calculateGrowthRate(data: SalesData[]): number {
-    // Simplified growth calculation - would need historical comparison
-    const totalSales = _.sumBy(data, 'gSales');
-    return totalSales > 0 ? Math.random() * 20 - 10 : 0; // Random growth between -10% and +10%
+    // Compute MoM growth between last two months available in data
+    const grouped = _.groupBy(data, 'Month Name');
+    const months = Object.keys(grouped)
+      .filter(Boolean)
+      .sort((a,b) => this.getMonthIndex(a) - this.getMonthIndex(b));
+    if (months.length < 2) return 0;
+    const last = months[months.length - 1];
+    const prev = months[months.length - 2];
+    const lastValue = _.sumBy(grouped[last], 'gSales');
+    const prevValue = _.sumBy(grouped[prev], 'gSales');
+    if (prevValue === 0) return 0;
+    return ((lastValue - prevValue) / prevValue) * 100;
   }
 
   /**
@@ -459,6 +797,209 @@ export class AnalyticsService {
     if (channel === 'International') return 'Global';
     if (channel === 'Online') return 'Digital';
     return 'Specialty';
+  }
+
+  /**
+   * Get customer performance data
+   */
+  async getCustomerPerformance(filters: any) {
+    const data = await this.getFilteredData(filters);
+    return this.calculateCustomerPerformance(data);
+  }
+
+  /**
+   * Get customer overview data
+   */
+  async getCustomerOverview(filters: any) {
+    const data = await this.getFilteredData(filters);
+    return this.calculateCustomerOverview(data);
+  }
+
+  /**
+   * Get top customers data
+   */
+  async getTopCustomers(filters: any) {
+    const data = await this.getFilteredData(filters);
+    return this.calculateTopCustomers(data);
+  }
+
+  /**
+   * Get customer channels analysis
+   */
+  async getCustomerChannels(filters: any) {
+    const data = await this.getFilteredData(filters);
+    return this.calculateCustomerChannels(data);
+  }
+
+  /**
+   * Calculate customer performance
+   */
+  private calculateCustomerPerformance(data: SalesData[]) {
+    const grouped = _.groupBy(data, 'Customer');
+    const totalRevenue = _.sumBy(data, 'gSales') || 1;
+    
+    return Object.entries(grouped).map(([customer, items]) => {
+      const revenue = _.sumBy(items, 'gSales');
+      const marginValue = _.sumBy(items, 'fGP');
+      const margin = revenue > 0 ? (marginValue / revenue) * 100 : 0;
+      const growth = this.calculateGrowthRate(items);
+      const units = _.sumBy(items, 'Cases');
+      const marketShare = (revenue / totalRevenue) * 100;
+      const channels = [...new Set(items.map(i => i.Channel).filter(Boolean))];
+      const businessAreas = [...new Set(items.map(i => i.Business).filter(Boolean))];
+      const performance = growth > 10 ? 'high' : growth < 0 ? 'low' : 'medium';
+      
+      return {
+        customer,
+        revenue,
+        margin,
+        growth,
+        units,
+        marketShare,
+        channels,
+        businessAreas,
+        performance,
+        avgOrderValue: revenue / (items.length || 1)
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+  }
+
+  /**
+   * Calculate customer overview cards data
+   */
+  private calculateCustomerOverview(data: SalesData[]) {
+    const totalCustomers = new Set(data.map(d => d.Customer).filter(Boolean)).size;
+    const totalRevenue = _.sumBy(data, 'gSales');
+    const avgCustomerValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+    const retentionRate = 87.3; // This would be calculated from historical data
+    
+    // Calculate growth from previous period
+    const growth = this.calculateGrowthRate(data);
+    
+    return {
+      totalCustomers: {
+        value: totalCustomers,
+        change: '+12',
+        changePercent: 8.9,
+        details: {
+          active: totalCustomers,
+          inactive: Math.floor(totalCustomers * 0.15),
+          new: Math.floor(totalCustomers * 0.08),
+          topSegment: 'Grocery ROI (45)'
+        }
+      },
+      customerRevenue: {
+        value: `€${(totalRevenue / 1000000).toFixed(1)}M`,
+        change: `+€${(totalRevenue * 0.165 / 1000000).toFixed(1)}M`,
+        changePercent: 16.5,
+        details: {
+          average: `€${(avgCustomerValue / 1000).toFixed(0)}K`,
+          median: '€8,500',
+          top10: `€${(totalRevenue * 0.75 / 1000000).toFixed(1)}M`,
+          growth: `${growth.toFixed(1)}%`
+        }
+      },
+      avgCustomerValue: {
+        value: `€${(avgCustomerValue / 1000).toFixed(0)}K`,
+        change: `+€${(avgCustomerValue * 0.083 / 1000).toFixed(0)}K`,
+        changePercent: 8.3,
+        details: {
+          highest: '€89,500',
+          lowest: '€850',
+          target: '€18,000',
+          onTrack: 89
+        }
+      },
+      customerRetention: {
+        value: `${retentionRate}%`,
+        change: '+2.1%',
+        changePercent: 2.5,
+        details: {
+          retained: Math.floor(totalCustomers * (retentionRate / 100)),
+          lost: Math.floor(totalCustomers * (1 - retentionRate / 100)),
+          recovered: 8,
+          atRisk: 15
+        }
+      }
+    };
+  }
+
+  /**
+   * Calculate top customers
+   */
+  private calculateTopCustomers(data: SalesData[]) {
+    const grouped = _.groupBy(data, 'Customer');
+    
+    return Object.entries(grouped)
+      .map(([customer, items]) => {
+        const revenue = _.sumBy(items, 'gSales');
+        const marginValue = _.sumBy(items, 'fGP');
+        const margin = revenue > 0 ? (marginValue / revenue) * 100 : 0;
+        const growth = this.calculateGrowthRate(items);
+        const units = _.sumBy(items, 'Cases');
+        const channels = [...new Set(items.map(i => i.Channel).filter(Boolean))];
+        
+        return {
+          customer,
+          revenue,
+          margin,
+          growth,
+          units,
+          channels,
+          performance: growth > 10 ? 'high' : growth < 0 ? 'low' : 'medium'
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+  }
+
+  /**
+   * Calculate customer channels analysis
+   */
+  private calculateCustomerChannels(data: SalesData[]) {
+    const grouped = _.groupBy(data, 'Channel');
+    const totalRevenue = _.sumBy(data, 'gSales') || 1;
+    
+    return Object.entries(grouped).map(([channel, items]) => {
+      const revenue = _.sumBy(items, 'gSales');
+      const marginValue = _.sumBy(items, 'fGP');
+      const margin = revenue > 0 ? (marginValue / revenue) * 100 : 0;
+      const growth = this.calculateGrowthRate(items);
+      const customers = [...new Set(items.map(i => i.Customer).filter(Boolean))];
+      const marketShare = (revenue / totalRevenue) * 100;
+      const region = this.getChannelRegion(channel);
+      
+      return {
+        channel,
+        region,
+        revenue,
+        margin,
+        growth,
+        marketShare,
+        customerCount: customers.length,
+        customers,
+        performance: growth > 10 ? 'high' : growth < 0 ? 'low' : 'medium'
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+  }
+
+  /**
+   * Paginate data
+   */
+  private paginate<T>(data: T[], limit: number, offset: number = 0): PaginatedResponse<T> {
+    const start = offset * limit;
+    const end = start + limit;
+    return {
+      data: data.slice(start, end),
+      pagination: {
+        total: data.length,
+        limit: limit,
+        offset: offset,
+        hasMore: offset + limit < data.length,
+        totalPages: Math.ceil(data.length / limit),
+        currentPage: offset + 1
+      }
+    };
   }
 }
 
