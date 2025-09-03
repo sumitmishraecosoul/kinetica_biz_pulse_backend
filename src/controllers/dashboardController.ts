@@ -507,7 +507,7 @@ export class DashboardController {
     try {
       const filters = this.parseFilters(req);
       const comparison = (req.query.comparison as string) || 'LYTD';
-      const variance = await analyticsService.getVarianceAnalysis(filters, comparison);
+      const variance = await analyticsService.getVariance(filters);
       const meta = getAzureService().getLastFetchMeta();
       res.setHeader('x-data-source', meta.source);
       res.setHeader('x-row-count', String(meta.rowCount));
