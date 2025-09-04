@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import Joi from 'joi';
 import { dashboardController } from '@/controllers/dashboardController';
+import { analyticsService } from '@/services/analyticsService';
+import { logger } from '@/utils/logger';
 
 const router = Router();
 
@@ -147,6 +149,80 @@ router.get('/top-customers', validateQuery, dashboardController.getTopCustomers.
  * @access Public
  */
 router.get('/customer-channels', validateQuery, dashboardController.getCustomerChannels.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/business-area-detailed
+ * @desc Get detailed business area metrics
+ * @access Public
+ */
+router.get('/business-area-detailed', validateQuery, dashboardController.getBusinessAreaDetailedMetrics.bind(dashboardController));
+
+  // Dashboard Charts endpoints
+  router.post('/fgp-by-business', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getFGPByBusiness(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in fGP by Business endpoint:', error);
+      res.status(500).json({ error: 'Failed to get fGP by Business data' });
+    }
+  });
+
+  router.post('/fgp-by-channel', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getFGPByChannel(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in fGP by Channel endpoint:', error);
+      res.status(500).json({ error: 'Failed to get fGP by Channel data' });
+    }
+  });
+
+  router.post('/fgp-monthly-trend', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getFGPMonthlyTrend(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in fGP Monthly Trend endpoint:', error);
+      res.status(500).json({ error: 'Failed to get fGP Monthly Trend data' });
+    }
+  });
+
+  router.post('/gsales-by-business', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getGSalesByBusiness(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in gSales by Business endpoint:', error);
+      res.status(500).json({ error: 'Failed to get gSales by Business data' });
+    }
+  });
+
+  router.post('/gsales-by-channel', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getGSalesByChannel(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in gSales by Channel endpoint:', error);
+      res.status(500).json({ error: 'Failed to get gSales by Channel data' });
+    }
+  });
+
+  router.post('/gsales-monthly-trend', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getGSalesMonthlyTrend(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in gSales Monthly Trend endpoint:', error);
+      res.status(500).json({ error: 'Failed to get gSales Monthly Trend data' });
+    }
+  });
 
 export default router;
 

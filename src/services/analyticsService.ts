@@ -1163,6 +1163,467 @@ export class AnalyticsService {
       }
     };
   }
+
+  /**
+   * Get business area detailed metrics (YTD, LY Var No, LY Var %)
+   */
+  async getBusinessAreaDetailedMetrics(filters: DataFilters): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const allData = await azureService.fetchCSVData();
+      
+      // Determine the comparison periods based on filters
+      let currentYear: number;
+      let previousYear: number;
+      
+      if (filters.period && filters.period !== 'YTD') {
+        // Specific year selected
+        currentYear = parseInt(filters.period);
+        previousYear = currentYear - 1;
+      } else {
+        // YTD - use current year vs previous year
+        currentYear = new Date().getFullYear();
+        previousYear = currentYear - 1;
+      }
+      
+             // Get data for current year and previous year
+       let currentYearData = allData.filter(row => row.Year === currentYear);
+       let previousYearData = allData.filter(row => row.Year === previousYear);
+       
+       // Apply business area filter if specified
+       if (filters.businessArea && filters.businessArea !== 'All') {
+         currentYearData = currentYearData.filter(row => row.Business === filters.businessArea);
+         previousYearData = previousYearData.filter(row => row.Business === filters.businessArea);
+       }
+       
+       // Apply channel filter if specified
+       if (filters.channel && filters.channel !== 'All') {
+         currentYearData = currentYearData.filter(row => row.Channel === filters.channel);
+         previousYearData = previousYearData.filter(row => row.Channel === filters.channel);
+       }
+       
+       // Get business areas available ONLY in the current year (not all years)
+       const currentYearBusinessAreas = [...new Set(currentYearData.map(row => row.Business).filter(Boolean))];
+       
+       // If month is specified, filter by month
+       let filteredCurrentData = currentYearData;
+       let filteredPreviousData = previousYearData;
+       
+       if (filters.month && filters.month !== 'All') {
+         filteredCurrentData = currentYearData.filter(row => row['Month Name'] === filters.month);
+         filteredPreviousData = previousYearData.filter(row => row['Month Name'] === filters.month);
+       }
+       
+       // Apply business area filter if specified (for drill-down)
+       if (filters.businessArea && filters.businessArea !== 'All') {
+         filteredCurrentData = filteredCurrentData.filter(row => row.Business === filters.businessArea);
+         filteredPreviousData = filteredPreviousData.filter(row => row.Business === filters.businessArea);
+       }
+      
+      const detailedMetrics = currentYearBusinessAreas.map(businessArea => {
+        // Filter current year data for this business area
+        const currentBusinessData = filteredCurrentData.filter(row => row.Business === businessArea);
+        // Filter previous year data for this business area
+        const previousBusinessData = filteredPreviousData.filter(row => row.Business === businessArea);
+        
+        // Calculate current period metrics using your Excel formulas
+        // YTD No = SUM of all data for current year/business area
+        const currentCases = _.sumBy(currentBusinessData, 'Cases');
+        const currentGSales = _.sumBy(currentBusinessData, 'gSales');
+        const currentFGP = _.sumBy(currentBusinessData, 'fGP');
+        
+        // Previous year metrics for comparison
+        const previousCases = _.sumBy(previousBusinessData, 'Cases');
+        const previousGSales = _.sumBy(previousBusinessData, 'gSales');
+        const previousFGP = _.sumBy(previousBusinessData, 'fGP');
+        
+        // Calculate variance numbers (LY Var No = Current - Previous)
+        // Formula: =C10-D10 (Current - Previous)
+        const casesVarNo = currentCases - previousCases;
+        const gSalesVarNo = currentGSales - previousGSales;
+        const fGPVarNo = currentFGP - previousFGP;
+        
+        // Calculate variance percentages (LY Var %)
+        // Formula: =IFERROR(E10/ABS(D10),0) (Variance / ABS(Previous))
+        const casesVarPercent = previousCases !== 0 ? (casesVarNo / Math.abs(previousCases)) * 100 : 0;
+        const gSalesVarPercent = previousGSales !== 0 ? (gSalesVarNo / Math.abs(previousGSales)) * 100 : 0;
+        const fGPVarPercent = previousFGP !== 0 ? (fGPVarNo / Math.abs(previousFGP)) * 100 : 0;
+        
+        return {
+          businessArea,
+          cases: {
+            ytdNo: currentCases,
+            lyVarNo: casesVarNo,
+            lyVarPercent: casesVarPercent
+          },
+          gSales: {
+            ytdNo: currentGSales,
+            lyVarNo: gSalesVarNo,
+            lyVarPercent: gSalesVarPercent
+          },
+          fGP: {
+            ytdNo: currentFGP,
+            lyVarNo: fGPVarNo,
+            lyVarPercent: fGPVarPercent
+          }
+        };
+      });
+      
+      return detailedMetrics;
+      
+    } catch (error) {
+      logger.error('Error getting business area detailed metrics:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get filter options (years, months, business areas, channels) with optional business area filtering
+   */
+  async getFilterOptions(filters?: { year?: number; businessArea?: string }): Promise<any> {
+    try {
+      const azureService = getAzureService();
+      const allData = await azureService.fetchCSVData();
+
+      let filteredData = allData;
+
+      // Apply year filter if specified
+      if (filters?.year) {
+        filteredData = allData.filter(row => row.Year === filters.year);
+      }
+
+      // Apply business area filter if specified
+      if (filters?.businessArea && filters.businessArea !== 'All') {
+        filteredData = allData.filter(row => row.Business === filters.businessArea);
+      }
+
+      // Get unique values from filtered data
+      const years = [...new Set(filteredData.map(row => row.Year))].sort((a, b) => b - a);
+      const months = [...new Set(filteredData.map(row => row['Month Name']).filter(Boolean))];
+      const businessAreas = [...new Set(filteredData.map(row => row.Business).filter(Boolean))].sort();
+      const channels = [...new Set(filteredData.map(row => row.Channel).filter(Boolean))].sort();
+
+      // Sort months in chronological order
+      const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const sortedMonths = months.sort((a, b) => {
+        const aIndex = monthOrder.indexOf(a);
+        const bIndex = monthOrder.indexOf(b);
+        return aIndex - bIndex;
+      });
+
+      return {
+        years,
+        months: sortedMonths,
+        businessAreas,
+        channels
+      };
+
+    } catch (error) {
+      logger.error('Error getting filter options:', error);
+      return {
+        years: [],
+        months: [],
+        businessAreas: [],
+        channels: []
+      };
+    }
+  }
+
+  // Dashboard Charts Methods
+  async getFGPByBusiness(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel } = filters;
+
+      // Debug: Log the first few rows to see the actual structure
+      if (csvData.length > 0) {
+        logger.info('First row structure:', Object.keys(csvData[0]));
+        logger.info('Sample row data:', csvData[0]);
+        logger.info('Filters received:', { year, month, business, channel });
+      }
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
+        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      logger.info('Filtered data count:', filteredData.length);
+
+      // Group by Business Area and calculate fGP for each year
+      const businessGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const businessArea = row.Business;
+        const year = row.Year?.toString();
+        const fGP = parseFloat(row.fGP) || 0;
+
+        if (!businessGroups.has(businessArea)) {
+          businessGroups.set(businessArea, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && businessGroups.get(businessArea).hasOwnProperty(year)) {
+          businessGroups.get(businessArea)[year] += fGP;
+        }
+      });
+
+      // Convert to array format for charts
+      const result = Array.from(businessGroups.entries()).map(([business, years]) => ({
+        business,
+        ...years
+      }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting fGP by Business:', error);
+      throw error;
+    }
+  }
+
+  async getFGPByChannel(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel } = filters;
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
+        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Group by Channel and calculate fGP for each year
+      const channelGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const channelName = row.Channel;
+        const year = row.Year?.toString();
+        const fGP = parseFloat(row.fGP) || 0;
+
+        if (!channelGroups.has(channelName)) {
+          channelGroups.set(channelName, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && channelGroups.get(channelName).hasOwnProperty(year)) {
+          channelGroups.get(channelName)[year] += fGP;
+        }
+      });
+
+      // Convert to array format for charts
+      const result = Array.from(channelGroups.entries()).map(([channel, years]) => ({
+        channel,
+        ...years
+      }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting fGP by Channel:', error);
+      throw error;
+    }
+  }
+
+  async getFGPMonthlyTrend(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel } = filters;
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
+        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Define month order
+      const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      // Group by Month and calculate fGP for each year
+      const monthGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const month = row['Month Name'];
+        const year = row.Year?.toString();
+        const fGP = parseFloat(row.fGP) || 0;
+
+        if (!monthGroups.has(month)) {
+          monthGroups.set(month, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && monthGroups.get(month).hasOwnProperty(year)) {
+          monthGroups.get(month)[year] += fGP;
+        }
+      });
+
+      // Convert to array format for charts and sort by month order
+      const result = monthOrder
+        .filter(month => monthGroups.has(month))
+        .map(month => ({
+          month,
+          ...monthGroups.get(month)
+        }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting fGP Monthly Trend:', error);
+      throw error;
+    }
+  }
+
+  async getGSalesByBusiness(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel } = filters;
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
+        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Group by Business Area and calculate gSales for each year
+      const businessGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const businessArea = row.Business;
+        const year = row.Year?.toString();
+        const gSales = parseFloat(row.gSales) || 0;
+
+        if (!businessGroups.has(businessArea)) {
+          businessGroups.set(businessArea, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && businessGroups.get(businessArea).hasOwnProperty(year)) {
+          businessGroups.get(businessArea)[year] += gSales;
+        }
+      });
+
+      // Convert to array format for charts
+      const result = Array.from(businessGroups.entries()).map(([business, years]) => ({
+        business,
+        ...years
+      }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting gSales by Business:', error);
+      throw error;
+    }
+  }
+
+  async getGSalesByChannel(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel } = filters;
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
+        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Group by Channel and calculate gSales for each year
+      const channelGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const channelName = row.Channel;
+        const year = row.Year?.toString();
+        const gSales = parseFloat(row.gSales) || 0;
+
+        if (!channelGroups.has(channelName)) {
+          channelGroups.set(channelName, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && channelGroups.get(channelName).hasOwnProperty(year)) {
+          channelGroups.get(channelName)[year] += gSales;
+        }
+      });
+
+      // Convert to array format for charts
+      const result = Array.from(channelGroups.entries()).map(([channel, years]) => ({
+        channel,
+        ...years
+      }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting gSales by Channel:', error);
+      throw error;
+    }
+  }
+
+  async getGSalesMonthlyTrend(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel } = filters;
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
+        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Define month order
+      const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      // Group by Month and calculate gSales for each year
+      const monthGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const month = row['Month Name'];
+        const year = row.Year?.toString();
+        const gSales = parseFloat(row.gSales) || 0;
+
+        if (!monthGroups.has(month)) {
+          monthGroups.set(month, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && monthGroups.get(month).hasOwnProperty(year)) {
+          monthGroups.get(month)[year] += gSales;
+        }
+      });
+
+      // Convert to array format for charts and sort by month order
+      const result = monthOrder
+        .filter(month => monthGroups.has(month))
+        .map(month => ({
+          month,
+          ...monthGroups.get(month)
+        }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting gSales Monthly Trend:', error);
+      throw error;
+    }
+  }
 }
 
 export const analyticsService = new AnalyticsService();

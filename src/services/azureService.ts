@@ -36,7 +36,8 @@ export class AzureService {
     this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     this.containerName = 'thrive-worklytics';
     this.blobFolder = 'Biz-Pulse';
-    this.csvFileName = 'Front Office Flash - YTD.csv';
+    // this.csvFileName = 'Front Office Flash - YTD.csv';
+    this.csvFileName = 'yearly_data.csv';
 
     logger.info('Azure Service initialized', {
       containerName: this.containerName,

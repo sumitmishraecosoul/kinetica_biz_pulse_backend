@@ -216,100 +216,27 @@ export class DashboardController {
   }
 
   /**
-   * Get filter options
+   * Get filter options (years, months, business areas, channels)
    */
   async getFilterOptions(req: Request, res: Response) {
     try {
-      logger.info('Getting filter options');
-
-      const azureService = getAzureService();
-      const csvData = await azureService.fetchCSVData();
-
-      // Extract unique values for filters
-      const businessAreas = [...new Set(csvData.map((row: any) => row.Business).filter(Boolean))];
-      const brands = [...new Set(csvData.map((row: any) => row.Brand).filter(Boolean))];
-      const categories = [...new Set(csvData.map((row: any) => row.Category).filter(Boolean))];
-      const channels = [...new Set(csvData.map((row: any) => row.Channel).filter(Boolean))];
-      const customers = [...new Set(csvData.map((row: any) => row.Customer).filter(Boolean))];
-
-      // Extract available years and months from data
-      const years = [...new Set(csvData.map((row: any) => row.Year).filter(Boolean))].sort();
-      const months = [...new Set(csvData.map((row: any) => row['Month Name']).filter(Boolean))];
-
-      // Get current month and last month based on available data
-      const currentDate = new Date();
-      const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
-      const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
-        .toLocaleString('default', { month: 'long' });
-
-      // Map full month names to abbreviated names used in data
-      const monthMapping: { [key: string]: string } = {
-        'January': 'Jan', 'February': 'Feb', 'March': 'Mar', 'April': 'Apr',
-        'May': 'May', 'June': 'Jun', 'July': 'Jul', 'August': 'Aug',
-        'September': 'Sep', 'October': 'Oct', 'November': 'Nov', 'December': 'Dec'
-      };
-
-      // Check if current month and last month exist in the data (using abbreviated names)
-      const currentMonthAbbr = monthMapping[currentMonth];
-      const lastMonthAbbr = monthMapping[lastMonth];
-      const hasCurrentMonth = months.includes(currentMonthAbbr);
-      const hasLastMonth = months.includes(lastMonthAbbr);
-
-      // Build periods array based on available data
-      let periods = ['All'];
+      const { year, businessArea } = req.query;
       
-      // Add year-based periods only if we have multiple years
-      if (years.length > 1) {
-        periods.push('YTD', 'LYTD');
-      } else {
-        periods.push('YTD'); // Only current year
-      }
-      
-      // Add quarter-based periods
-      periods.push('Q1', 'Q2', 'Q3', 'Q4');
-      
-      // Add month-based periods only if they exist in data
-      if (hasCurrentMonth) {
-        periods.push('Current Month');
-      }
-      if (hasLastMonth) {
-        periods.push('Last Month');
-      }
-      
-      // Add individual months from the data
-      periods.push(...months);
-      
-      // Add years
-      periods.push(...years.map(year => year.toString()));
+      let filters: any = {};
+      if (year) filters.year = parseInt(year as string);
+      if (businessArea) filters.businessArea = businessArea as string;
 
-      const meta = getAzureService().getLastFetchMeta();
-      res.setHeader('x-data-source', meta.source);
-      res.setHeader('x-row-count', String(meta.rowCount));
-      res.setHeader('x-last-updated', meta.lastUpdated);
+      const filterOptions = await analyticsService.getFilterOptions(filters);
+      
       res.json({
         success: true,
-        data: {
-          periods,
-          years,
-          months,
-          currentMonth,
-          lastMonth,
-          businessAreas,
-          brands,
-          categories,
-          channels,
-          customers
-        }
+        data: filterOptions
       });
     } catch (error) {
       logger.error('Error getting filter options:', error);
       res.status(500).json({
         success: false,
-        error: {
-          code: 'FILTER_OPTIONS_ERROR',
-          message: 'Failed to get filter options',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        }
+        message: 'Failed to get filter options'
       });
     }
   }
@@ -516,6 +443,32 @@ export class DashboardController {
     } catch (error) {
       logger.error('Error getting variance analysis:', error);
       res.status(500).json({ success: false, error: { code: 'VARIANCE_ERROR', message: 'Failed to get variance analysis' } });
+    }
+  }
+
+  /**
+   * Get business area detailed metrics
+   */
+  async getBusinessAreaDetailedMetrics(req: Request, res: Response) {
+    try {
+      const filters = this.parseFilters(req);
+      const detailedMetrics = await analyticsService.getBusinessAreaDetailedMetrics(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      
+      res.json({ success: true, data: detailedMetrics });
+    } catch (error) {
+      logger.error('Error getting business area detailed metrics:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: { 
+          code: 'BUSINESS_AREA_DETAILED_ERROR', 
+          message: 'Failed to get business area detailed metrics' 
+        } 
+      });
     }
   }
 
