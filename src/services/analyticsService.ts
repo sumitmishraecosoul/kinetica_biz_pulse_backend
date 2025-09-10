@@ -80,6 +80,171 @@ export class AnalyticsService {
   }
 
   /**
+   * Get reports business area summary implementing Excel formulas
+   */
+  async getReportsBusinessAreaSummary(filters: DataFilters): Promise<any[]> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    const cacheKey = `reports_business_area_${JSON.stringify(filters)}`;
+    
+    // Check cache first
+    const cached = await cacheService.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const azureService = getAzureService();
+      const data = await azureService.fetchCSVData();
+      console.log(`\n=== Azure Data Debug (Business Area) ===`);
+      console.log(`Raw data length: ${data.length}`);
+      if (data.length > 0) {
+        console.log('Sample raw data row:', data[0]);
+        console.log('Available columns:', Object.keys(data[0]));
+        
+        // Debug: Check available years and months
+        const availableYears = [...new Set(data.map(row => row.Year))].sort();
+        const availableMonths = [...new Set(data.map(row => row['Month Name']))].sort();
+        console.log('Available years:', availableYears);
+        console.log('Available months:', availableMonths);
+        
+        // Debug: Check data distribution by year
+        const yearDistribution = _.groupBy(data, 'Year');
+        Object.keys(yearDistribution).forEach(year => {
+          console.log(`Year ${year}: ${yearDistribution[year].length} rows`);
+        });
+        
+        // Debug: Check sample data for each year
+        availableYears.forEach(year => {
+          const yearData = data.filter(row => row.Year == year);
+          if (yearData.length > 0) {
+            console.log(`\n--- Sample data for Year ${year} ---`);
+            console.log('First row:', yearData[0]);
+            console.log('Available months in this year:', [...new Set(yearData.map(row => row['Month Name']))].sort());
+            console.log('Sample Business areas:', [...new Set(yearData.map(row => row.Business))].slice(0, 5));
+            console.log('Sample Channels:', [...new Set(yearData.map(row => row.Channel))].slice(0, 5));
+          }
+        });
+      }
+      
+      const filteredData = this.applyFilters(data, filters);
+      console.log(`Filtered data length: ${filteredData.length}`);
+      
+      const businessAreas = ['Food', 'Household', 'Brillo & KMPL', 'Kinetica'];
+      const results: any[] = [];
+
+      for (const businessArea of businessAreas) {
+        const rowData = this.calculateReportsRowData(filteredData, filters, businessArea, 'businessArea');
+        results.push({
+          name: businessArea,
+          ...rowData
+        });
+      }
+
+      // Calculate Total row
+      const totalRow = this.calculateReportsTotalRow(results);
+      results.push({
+        name: 'Total',
+        ...totalRow
+      });
+
+      // Calculate Total Household row (Household + Brillo & KMPL)
+      const householdRow = this.calculateReportsHouseholdTotal(results);
+      results.push({
+        name: 'Total Household',
+        ...householdRow
+      });
+
+      // Cache the result
+      await cacheService.set(cacheKey, results, 1800); // 30 minutes
+      
+      return results;
+    } catch (error) {
+      logger.error('Error getting reports business area summary:', error);
+      if (allowEmpty) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Get reports channel summary implementing Excel formulas
+   */
+  async getReportsChannelSummary(filters: DataFilters): Promise<any[]> {
+    const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
+    const cacheKey = `reports_channel_${JSON.stringify(filters)}`;
+    
+    // Check cache first
+    const cached = await cacheService.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const azureService = getAzureService();
+      const data = await azureService.fetchCSVData();
+      console.log(`\n=== Azure Data Debug (Channel) ===`);
+      console.log(`Raw data length: ${data.length}`);
+      if (data.length > 0) {
+        console.log('Sample raw data row:', data[0]);
+        console.log('Available columns:', Object.keys(data[0]));
+      }
+      
+      const filteredData = this.applyFilters(data, filters);
+      console.log(`Filtered data length: ${filteredData.length}`);
+      
+      const channels = [
+        'Grocery ROI', 
+        'Grocery UK & NI', 
+        'Wholesale ROI', 
+        'Wholesale UK & NI', 
+        'International', 
+        'Online', 
+        'Sports & Others'
+      ];
+      const results: any[] = [];
+
+      for (const channel of channels) {
+        const rowData = this.calculateReportsRowData(filteredData, filters, channel, 'channel');
+        results.push({
+          name: channel,
+          ...rowData
+        });
+      }
+
+      // Calculate Total row
+      const totalRow = this.calculateReportsTotalRow(results);
+      results.push({
+        name: 'Total',
+        ...totalRow
+      });
+
+      // Calculate Grocery & Wholesale ROI (Grocery ROI + Wholesale ROI)
+      const groceryWholesaleROI = this.calculateReportsCombinedRow(
+        results, 
+        ['Grocery ROI', 'Wholesale ROI'], 
+        'Grocery & Wholesale ROI'
+      );
+      results.push(groceryWholesaleROI);
+
+      // Calculate Grocery & Wholesale UK & NI (Grocery UK & NI + Wholesale UK & NI)
+      const groceryWholesaleUKNI = this.calculateReportsCombinedRow(
+        results, 
+        ['Grocery UK & NI', 'Wholesale UK & NI'], 
+        'Grocery & Wholesale UK & NI'
+      );
+      results.push(groceryWholesaleUKNI);
+
+      // Cache the result
+      await cacheService.set(cacheKey, results, 1800); // 30 minutes
+      
+      return results;
+    } catch (error) {
+      logger.error('Error getting reports channel summary:', error);
+      if (allowEmpty) return [];
+      throw error;
+    }
+  }
+
+  /**
    * Get top performers analysis
    */
   async getTopPerformers(filters: DataFilters, metric: string = 'gSales', limit: number = config.topNDefaultLimit, dimension: keyof SalesData = 'Brand', offset: number = 0): Promise<PaginatedResponse<TopPerformer>> {
@@ -1623,6 +1788,444 @@ export class AnalyticsService {
       logger.error('Error getting gSales Monthly Trend:', error);
       throw error;
     }
+  }
+
+  /**
+   * Calculate reports row data implementing Excel formulas
+   * Year-to-year comparison: Current Year vs Last Year
+   */
+  private calculateReportsRowData(
+    data: any[], 
+    filters: DataFilters, 
+    rowName: string, 
+    dimension: 'businessArea' | 'channel'
+  ) {
+    const requestedYear = filters.year || new Date().getFullYear();
+    const isYTD = !filters.month || filters.month === 'All';
+    
+    console.log(`\n=== Calculating Row Data for ${rowName} (${dimension}) ===`);
+    console.log('Requested Year:', requestedYear);
+    console.log('Is YTD:', isYTD);
+    console.log('Filters:', filters);
+    console.log('Data length:', data.length);
+    
+    // Debug: Check what years are available in the data
+    const availableYears = [...new Set(data.map(row => row.Year))].sort();
+    console.log('Available years in data:', availableYears);
+    
+    // Determine the actual years to use for comparison
+    let currentYear, lastYear;
+    
+    if (availableYears.includes(requestedYear)) {
+      // Requested year exists, use it as current year
+      currentYear = requestedYear;
+      lastYear = requestedYear - 1;
+    } else {
+      // Requested year doesn't exist, use the latest available year as current
+      currentYear = Math.max(...availableYears);
+      lastYear = currentYear - 1;
+      console.log(`⚠️ Requested year ${requestedYear} not found. Using ${currentYear} as current year.`);
+    }
+    
+    // Check if we have data for both current and last year
+    const hasCurrentYearData = availableYears.includes(currentYear);
+    const hasLastYearData = availableYears.includes(lastYear);
+    console.log(`Current Year: ${currentYear}, Last Year: ${lastYear}`);
+    console.log(`Has ${currentYear} data:`, hasCurrentYearData);
+    console.log(`Has ${lastYear} data:`, hasLastYearData);
+
+    // Formula 1: Cases YTD = SUMIFS for current year (YTD or specific month)
+    const casesYTD = this.reportsSumifs(data, 'Cases', {
+      year: currentYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
+      channel: dimension === 'channel' ? rowName : filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 2: Cases LY = SUMIFS for last year (same period)
+    const casesLY = this.reportsSumifs(data, 'Cases', {
+      year: lastYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
+      channel: dimension === 'channel' ? rowName : filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 3: Cases LY Var = Current Year - Last Year
+    const casesLYVar = casesYTD - casesLY;
+
+    // Formula 4: Cases LY Var % = IFERROR(Var/ABS(Last Year),0)
+    const casesLYVarPercent = this.reportsIferror(casesLYVar / Math.abs(casesLY), 0) * 100;
+
+    // Formula 5: gSales YTD = SUMIFS for current year
+    const gSalesYTD = this.reportsSumifs(data, 'gSales', {
+      year: currentYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
+      channel: dimension === 'channel' ? rowName : filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    }) / 1000;
+
+    // Formula 6: gSales LY = SUMIFS for last year
+    const gSalesLY = this.reportsSumifs(data, 'gSales', {
+      year: lastYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
+      channel: dimension === 'channel' ? rowName : filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    }) / 1000;
+
+    // Formula 7: gSales LY Var = Current Year - Last Year
+    const gSalesLYVar = gSalesYTD - gSalesLY;
+
+    // Formula 8: gSales LY Var % = IFERROR(Var/ABS(Last Year),0)
+    const gSalesLYVarPercent = this.reportsIferror(gSalesLYVar / Math.abs(gSalesLY), 0) * 100;
+
+    // Formula 9: fGP YTD = SUMIFS for current year
+    const fGPYTD = this.reportsSumifs(data, 'fGP', {
+      year: currentYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
+      channel: dimension === 'channel' ? rowName : filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    }) / 1000;
+
+    // Formula 10: fGP LY = SUMIFS for last year
+    const fGPLY = this.reportsSumifs(data, 'fGP', {
+      year: lastYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
+      channel: dimension === 'channel' ? rowName : filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    }) / 1000;
+
+    const fGPLYVar = fGPYTD - fGPLY;
+
+    // Formula 11: fGP LY Var % = IFERROR(Var/ABS(Last Year),0)
+    const fGPLYVarPercent = this.reportsIferror(fGPLYVar / Math.abs(fGPLY), 0) * 100;
+
+    // Formula 12: fGP % YTD = IFERROR(fGP YTD / gSales YTD, 0)
+    const fGPPercentYTD = this.reportsIferror(fGPYTD / gSalesYTD, 0) * 100;
+
+    // Formula 13: fGP % LY = IFERROR(fGP LY / gSales LY, 0)
+    const fGPPercentLY = this.reportsIferror(fGPLY / gSalesLY, 0) * 100;
+    const fGPPercentLYVar = fGPPercentYTD - fGPPercentLY;
+
+    // Formula 14: fGP FY24 = Use last year fGP for comparison
+    const fGPFY24 = fGPLY; // Use last year fGP
+
+    // Formula 15: fGP FY24 CY v LY % = IFERROR(Current/ABS(Last Year),0)
+    const fGPFY24CYVLy = this.reportsIferror(fGPYTD / Math.abs(fGPFY24), 0) * 100;
+
+    return {
+      cases: {
+        ytd: Math.round(casesYTD),
+        ly: Math.round(casesLY),
+        lyVar: Math.round(casesLYVar),
+        lyVarPercent: Math.round(casesLYVarPercent * 10) / 10
+      },
+      gSales: {
+        ytd: Math.round(gSalesYTD),
+        ly: Math.round(gSalesLY),
+        lyVar: Math.round(gSalesLYVar),
+        lyVarPercent: Math.round(gSalesLYVarPercent * 10) / 10
+      },
+      fGP: {
+        ytd: Math.round(fGPYTD),
+        lyVar: Math.round(fGPLYVar),
+        lyVarPercent: Math.round(fGPLYVarPercent * 10) / 10
+      },
+      fGPPercent: {
+        ytd: Math.round(fGPPercentYTD * 10) / 10,
+        lyVar: Math.round(fGPPercentLYVar * 10) / 10
+      },
+      fGPFY24: {
+        ytd: Math.round(fGPFY24),
+        cyVLy: Math.round(fGPFY24CYVLy * 10) / 10
+      }
+    };
+  }
+
+  /**
+   * Implement SUMIFS function for reports
+   */
+  private reportsSumifs(
+    data: any[], 
+    sumColumn: string, 
+    criteria: {
+      year?: number;
+      month?: string;
+      businessArea?: string;
+      channel?: string;
+      customer?: string;
+      brand?: string;
+      category?: string;
+      subCategory?: string;
+    }
+  ): number {
+    console.log(`\n--- SUMIFS Debug ---`);
+    console.log(`Column: ${sumColumn}`);
+    console.log(`Criteria:`, criteria);
+    console.log(`Data length: ${data.length}`);
+    
+    // Debug: Check what years are available in the data
+    const availableYears = [...new Set(data.map(row => row.Year))].sort();
+    console.log(`Available years in data:`, availableYears);
+    
+    // Debug: Check if the requested year exists
+    if (criteria.year !== undefined) {
+      const hasRequestedYear = availableYears.includes(criteria.year);
+      console.log(`Requested year ${criteria.year} exists:`, hasRequestedYear);
+      if (!hasRequestedYear) {
+        console.log(`❌ Year ${criteria.year} not found in data! Available years:`, availableYears);
+        return 0;
+      }
+    }
+    
+    let matchCount = 0;
+    const result = data.reduce((sum, row) => {
+      // Check all criteria
+      if (criteria.year !== undefined && row.Year !== criteria.year) return sum;
+      if (criteria.month !== undefined && row['Month Name'] !== criteria.month) return sum;
+      if (criteria.businessArea !== undefined && criteria.businessArea !== 'All' && row.Business !== criteria.businessArea) return sum;
+      if (criteria.channel !== undefined && criteria.channel !== 'All' && row.Channel !== criteria.channel) return sum;
+      if (criteria.customer !== undefined && criteria.customer !== 'All' && row.Customer !== criteria.customer) return sum;
+      if (criteria.brand !== undefined && criteria.brand !== 'All' && row.Brand !== criteria.brand) return sum;
+      if (criteria.category !== undefined && criteria.category !== 'All' && row.Category !== criteria.category) return sum;
+      if (criteria.subCategory !== undefined && criteria.subCategory !== 'All' && row['Sub-Cat'] !== criteria.subCategory) return sum;
+      
+      // If all criteria match, add the value
+      matchCount++;
+      const value = row[sumColumn];
+      const numericValue = typeof value === 'number' ? value : 0;
+      if (matchCount <= 3) { // Log first 3 matches for debugging
+        console.log(`Match ${matchCount}:`, {
+          Year: row.Year,
+          'Month Name': row['Month Name'],
+          Business: row.Business,
+          Channel: row.Channel,
+          [sumColumn]: value
+        });
+      }
+      return sum + numericValue;
+    }, 0);
+    
+    console.log(`Total matches: ${matchCount}`);
+    console.log(`SUMIFS result: ${result}`);
+    return result;
+  }
+
+  /**
+   * Implement IFERROR function for reports
+   */
+  private reportsIferror(value: number, defaultValue: number): number {
+    if (isNaN(value) || !isFinite(value)) {
+      return defaultValue;
+    }
+    return value;
+  }
+
+  /**
+   * Calculate Total row for reports
+   */
+  private calculateReportsTotalRow(rows: any[]): any {
+    const total = rows.reduce((acc, row) => {
+      if (row.name === 'Total' || row.name === 'Total Household' || 
+          row.name === 'Grocery & Wholesale ROI' || row.name === 'Grocery & Wholesale UK & NI') {
+        return acc; // Skip already calculated totals
+      }
+
+      return {
+        cases: {
+          ytd: acc.cases.ytd + row.cases.ytd,
+          ly: acc.cases.ly + row.cases.ly,
+          lyVar: acc.cases.lyVar + row.cases.lyVar,
+          lyVarPercent: 0 // Will be calculated
+        },
+        gSales: {
+          ytd: acc.gSales.ytd + row.gSales.ytd,
+          ly: acc.gSales.ly + row.gSales.ly,
+          lyVar: acc.gSales.lyVar + row.gSales.lyVar,
+          lyVarPercent: 0 // Will be calculated
+        },
+        fGP: {
+          ytd: acc.fGP.ytd + row.fGP.ytd,
+          lyVar: acc.fGP.lyVar + row.fGP.lyVar,
+          lyVarPercent: 0 // Will be calculated
+        },
+        fGPPercent: {
+          ytd: 0, // Will be calculated
+          lyVar: 0 // Will be calculated
+        },
+        fGPFY24: {
+          ytd: acc.fGPFY24.ytd + row.fGPFY24.ytd,
+          cyVLy: 0 // Will be calculated
+        }
+      };
+    }, {
+      cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+      fGPPercent: { ytd: 0, lyVar: 0 },
+      fGPFY24: { ytd: 0, cyVLy: 0 }
+    });
+
+    // Calculate percentages for total
+    total.cases.lyVarPercent = this.reportsIferror(total.cases.lyVar / Math.abs(total.cases.ly), 0) * 100;
+    total.gSales.lyVarPercent = this.reportsIferror(total.gSales.lyVar / Math.abs(total.gSales.ly), 0) * 100;
+    // For fGP, we need to calculate LY from YTD - LYVar
+    const fGPLY = total.fGP.ytd - total.fGP.lyVar;
+    total.fGP.lyVarPercent = this.reportsIferror(total.fGP.lyVar / Math.abs(fGPLY), 0) * 100;
+    total.fGPPercent.ytd = this.reportsIferror(total.fGP.ytd / total.gSales.ytd, 0) * 100;
+    total.fGPFY24.cyVLy = this.reportsIferror(total.fGP.ytd / Math.abs(total.fGPFY24.ytd), 0) * 100;
+
+    return total;
+  }
+
+  /**
+   * Calculate Total Household for reports
+   */
+  private calculateReportsHouseholdTotal(rows: any[]): any {
+    const householdRow = rows.find(r => r.name === 'Household');
+    const brilloRow = rows.find(r => r.name === 'Brillo & KMPL');
+
+    if (!householdRow || !brilloRow) {
+      return {
+        cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGP: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+        fGPPercent: { ytd: 0, lyVar: 0 },
+        fGPFY24: { ytd: 0, cyVLy: 0 }
+      };
+    }
+
+    const total = {
+      cases: {
+        ytd: householdRow.cases.ytd + brilloRow.cases.ytd,
+        ly: householdRow.cases.ly + brilloRow.cases.ly,
+        lyVar: householdRow.cases.lyVar + brilloRow.cases.lyVar,
+        lyVarPercent: 0
+      },
+      gSales: {
+        ytd: householdRow.gSales.ytd + brilloRow.gSales.ytd,
+        ly: householdRow.gSales.ly + brilloRow.gSales.ly,
+        lyVar: householdRow.gSales.lyVar + brilloRow.gSales.lyVar,
+        lyVarPercent: 0
+      },
+      fGP: {
+        ytd: householdRow.fGP.ytd + brilloRow.fGP.ytd,
+        lyVar: householdRow.fGP.lyVar + brilloRow.fGP.lyVar,
+        lyVarPercent: 0
+      },
+      fGPPercent: {
+        ytd: 0,
+        lyVar: 0
+      },
+      fGPFY24: {
+        ytd: householdRow.fGPFY24.ytd + brilloRow.fGPFY24.ytd,
+        cyVLy: 0
+      }
+    };
+
+    // Calculate percentages
+    total.cases.lyVarPercent = this.reportsIferror(total.cases.lyVar / Math.abs(total.cases.ly), 0) * 100;
+    total.gSales.lyVarPercent = this.reportsIferror(total.gSales.lyVar / Math.abs(total.gSales.ly), 0) * 100;
+    // For fGP, we need to calculate LY from YTD - LYVar
+    const fGPLY = total.fGP.ytd - total.fGP.lyVar;
+    total.fGP.lyVarPercent = this.reportsIferror(total.fGP.lyVar / Math.abs(fGPLY), 0) * 100;
+    total.fGPPercent.ytd = this.reportsIferror(total.fGP.ytd / total.gSales.ytd, 0) * 100;
+    total.fGPFY24.cyVLy = this.reportsIferror(total.fGP.ytd / Math.abs(total.fGPFY24.ytd), 0) * 100;
+
+    return total;
+  }
+
+  /**
+   * Calculate combined rows for reports
+   */
+  private calculateReportsCombinedRow(
+    rows: any[], 
+    rowNames: string[], 
+    combinedName: string
+  ): any {
+    const selectedRows = rows.filter(r => rowNames.includes(r.name));
+    
+    if (selectedRows.length === 0) {
+      return {
+        name: combinedName,
+        cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGP: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+        fGPPercent: { ytd: 0, lyVar: 0 },
+        fGPFY24: { ytd: 0, cyVLy: 0 }
+      };
+    }
+
+    const total = selectedRows.reduce((acc, row) => ({
+      cases: {
+        ytd: acc.cases.ytd + row.cases.ytd,
+        ly: acc.cases.ly + row.cases.ly,
+        lyVar: acc.cases.lyVar + row.cases.lyVar,
+        lyVarPercent: 0
+      },
+      gSales: {
+        ytd: acc.gSales.ytd + row.gSales.ytd,
+        ly: acc.gSales.ly + row.gSales.ly,
+        lyVar: acc.gSales.lyVar + row.gSales.lyVar,
+        lyVarPercent: 0
+      },
+      fGP: {
+        ytd: acc.fGP.ytd + row.fGP.ytd,
+        lyVar: acc.fGP.lyVar + row.fGP.lyVar,
+        lyVarPercent: 0
+      },
+      fGPPercent: {
+        ytd: 0,
+        lyVar: 0
+      },
+      fGPFY24: {
+        ytd: acc.fGPFY24.ytd + row.fGPFY24.ytd,
+        cyVLy: 0
+      }
+    }), {
+      cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+      fGPPercent: { ytd: 0, lyVar: 0 },
+      fGPFY24: { ytd: 0, cyVLy: 0 }
+    });
+
+    // Calculate percentages
+    total.cases.lyVarPercent = this.reportsIferror(total.cases.lyVar / Math.abs(total.cases.ly), 0) * 100;
+    total.gSales.lyVarPercent = this.reportsIferror(total.gSales.lyVar / Math.abs(total.gSales.ly), 0) * 100;
+    // For fGP, we need to calculate LY from YTD - LYVar
+    const fGPLY = total.fGP.ytd - total.fGP.lyVar;
+    total.fGP.lyVarPercent = this.reportsIferror(total.fGP.lyVar / Math.abs(fGPLY), 0) * 100;
+    total.fGPPercent.ytd = this.reportsIferror(total.fGP.ytd / total.gSales.ytd, 0) * 100;
+    total.fGPFY24.cyVLy = this.reportsIferror(total.fGP.ytd / Math.abs(total.fGPFY24.ytd), 0) * 100;
+
+    return {
+      name: combinedName,
+      ...total
+    };
   }
 }
 

@@ -157,6 +157,27 @@ router.get('/customer-channels', validateQuery, dashboardController.getCustomerC
  */
 router.get('/business-area-detailed', validateQuery, dashboardController.getBusinessAreaDetailedMetrics.bind(dashboardController));
 
+/**
+ * @route GET /api/v1/dashboard/export-csv
+ * @desc Export filtered data as CSV
+ * @access Public
+ */
+router.get('/export-csv', validateQuery, dashboardController.exportCSV.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/business-area-summary
+ * @desc Get reports business area summary with Excel formulas
+ * @access Public
+ */
+router.get('/reports/business-area-summary', validateQuery, dashboardController.getReportsBusinessAreaSummary.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/channel-summary
+ * @desc Get reports channel summary with Excel formulas
+ * @access Public
+ */
+router.get('/reports/channel-summary', validateQuery, dashboardController.getReportsChannelSummary.bind(dashboardController));
+
   // Dashboard Charts endpoints
   router.post('/fgp-by-business', async (req, res) => {
     try {

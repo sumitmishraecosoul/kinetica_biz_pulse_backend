@@ -94,6 +94,13 @@ export class AzureService {
         stream
           .pipe(csv())
           .on('data', (row: any) => {
+            // Debug: Log first few raw rows to see the data structure
+            if (data.length < 3) {
+              console.log(`\n--- Raw CSV Row ${data.length + 1} ---`);
+              console.log('Raw row:', row);
+              console.log('Year field:', row.Year, 'Type:', typeof row.Year);
+            }
+            
             // Transform and validate data
             const { error } = this.rowSchema.validate(row, { abortEarly: false });
             if (error) {
@@ -144,9 +151,15 @@ export class AzureService {
         return null;
       }
 
+      // Debug: Check Year field conversion
+      const yearValue = parseInt(row.Year);
+      if (isNaN(yearValue) || yearValue === 0) {
+        console.log(`⚠️ Invalid Year field: "${row.Year}" -> ${yearValue}`);
+      }
+
       return {
         // Time dimensions
-        Year: parseInt(row.Year) || 0,
+        Year: yearValue || 0,
         'Month Name': row['Month Name'] || '',
         
         // Product dimensions

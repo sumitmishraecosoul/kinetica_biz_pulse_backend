@@ -605,6 +605,150 @@ export class DashboardController {
   }
 
   /**
+   * Export CSV data
+   */
+  async exportCSV(req: Request, res: Response) {
+    try {
+      logger.info('Exporting CSV data');
+      const filters = this.parseFilters(req);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+      
+      const csvData = await analyticsService.getFilteredData(filters);
+      
+      // Convert data to CSV format
+      const csvContent = this.convertToCSV(csvData);
+      
+      // Set headers for file download
+      const filename = `kinetica-report-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Cache-Control', 'no-cache');
+      
+      res.send(csvContent);
+    } catch (error) {
+      logger.error('Error exporting CSV:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'CSV_EXPORT_ERROR',
+          message: 'Failed to export CSV data',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Convert data to CSV format
+   */
+  private convertToCSV(data: any[]): string {
+    if (!data || data.length === 0) {
+      return 'No data available';
+    }
+
+    // Get all unique keys from the data
+    const allKeys = new Set<string>();
+    data.forEach(row => {
+      Object.keys(row).forEach(key => allKeys.add(key));
+    });
+
+    const headers = Array.from(allKeys);
+    
+    // Create CSV header row
+    const csvHeader = headers.join(',');
+    
+    // Create CSV data rows
+    const csvRows = data.map(row => {
+      return headers.map(header => {
+        const value = row[header];
+        // Handle values that contain commas or quotes
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value || '';
+      }).join(',');
+    });
+
+    return [csvHeader, ...csvRows].join('\n');
+  }
+
+  /**
+   * Get reports summary data for Business Areas
+   * Implements the exact Excel formulas provided
+   */
+  async getReportsBusinessAreaSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting reports business area summary');
+      const filters = this.parseFilters(req);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getReportsBusinessAreaSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting reports business area summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'REPORTS_BUSINESS_AREA_ERROR',
+          message: 'Failed to get reports business area summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get reports summary data for Channels
+   * Implements the exact Excel formulas provided
+   */
+  async getReportsChannelSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting reports channel summary');
+      const filters = this.parseFilters(req);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getReportsChannelSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting reports channel summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'REPORTS_CHANNEL_ERROR',
+          message: 'Failed to get reports channel summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
    * Parse filters from query
    */
   private parseFilters(req: Request) {
