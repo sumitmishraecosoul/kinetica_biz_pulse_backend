@@ -115,6 +115,14 @@ export class AzureService {
           .on('end', async () => {
             logger.info(`Successfully parsed ${data.length} rows from CSV`);
             
+            // Debug: Check what years are in the parsed data
+            const yearsInData = [...new Set(data.map(row => row.Year))].sort();
+            console.log(`📊 Years found in parsed data:`, yearsInData);
+            console.log(`📊 Row count by year:`, yearsInData.map(year => ({
+              year,
+              count: data.filter(row => row.Year === year).length
+            })));
+            
             // Cache the data
             await cacheService.set(cacheKey, data, 3600); // Cache for 1 hour
             this.lastFetchMeta = {
@@ -155,11 +163,12 @@ export class AzureService {
       const yearValue = parseInt(row.Year);
       if (isNaN(yearValue) || yearValue === 0) {
         console.log(`⚠️ Invalid Year field: "${row.Year}" -> ${yearValue}`);
+        return null; // Skip invalid rows instead of setting Year to 0
       }
 
       return {
         // Time dimensions
-        Year: yearValue || 0,
+        Year: yearValue,
         'Month Name': row['Month Name'] || '',
         
         // Product dimensions

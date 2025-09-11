@@ -64,7 +64,7 @@ app.use(cors({
   origin: true, // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-roles', 'x-allowed-business-areas', 'x-allowed-channels', 'x-allowed-brands', 'x-allowed-customers']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-roles', 'x-allowed-business-areas', 'x-allowed-channels', 'x-allowed-brands', 'x-allowed-customers', 'Cache-Control', 'Pragma', 'Expires']
 }));
 
 // Rate limiting - DISABLED for development to prevent access issues

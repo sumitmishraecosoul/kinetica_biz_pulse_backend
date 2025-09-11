@@ -59,6 +59,8 @@ export interface DataFilters {
   allowedChannels?: string[];
   allowedBrands?: string[];
   allowedCustomers?: string[];
+  // Internal flags
+  skipYearFilter?: boolean;
 }
 
 // Aggregated data interfaces

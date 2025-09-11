@@ -8,7 +8,7 @@ import { logger } from '@/utils/logger';
 
 export class AnalyticsService {
   private static readonly MONTHS = [
-    'January','February','March','April','May','June','July','August','September','October','November','December'
+    'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
   ];
 
   private getMonthIndex(monthName: string): number {
@@ -84,13 +84,14 @@ export class AnalyticsService {
    */
   async getReportsBusinessAreaSummary(filters: DataFilters): Promise<any[]> {
     const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
-    const cacheKey = `reports_business_area_${JSON.stringify(filters)}`;
+    // Disable caching temporarily to ensure fresh data
+    // const cacheKey = `reports_business_area_${JSON.stringify(filters)}`;
     
-    // Check cache first
-    const cached = await cacheService.get<any[]>(cacheKey);
-    if (cached) {
-      return cached;
-    }
+    // Check cache first - DISABLED FOR TESTING
+    // const cached = await cacheService.get<any[]>(cacheKey);
+    // if (cached) {
+    //   return cached;
+    // }
 
     try {
       const azureService = getAzureService();
@@ -126,7 +127,22 @@ export class AnalyticsService {
         });
       }
       
-      const filteredData = this.applyFilters(data, filters);
+      // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+      // Only apply non-year filters to preserve data for both current and last year
+      const reportsFilters = { ...filters };
+      delete reportsFilters.year; // Remove year filter to get all years
+      
+      // CRITICAL FIX: Set period to MTD when month is specified to enable month filtering
+      if (filters.month && filters.month !== 'All') {
+        reportsFilters.period = 'MTD';
+        // CRITICAL: Also remove year from the period logic to prevent filtering
+        delete reportsFilters.year;
+      }
+      
+      // CRITICAL: Add flag to skip year filtering for reports
+      reportsFilters.skipYearFilter = true;
+      
+      const filteredData = this.applyFilters(data, reportsFilters);
       console.log(`Filtered data length: ${filteredData.length}`);
       
       const businessAreas = ['Food', 'Household', 'Brillo & KMPL', 'Kinetica'];
@@ -155,7 +171,7 @@ export class AnalyticsService {
       });
 
       // Cache the result
-      await cacheService.set(cacheKey, results, 1800); // 30 minutes
+      // await cacheService.set(cacheKey, results, 1800); // 30 minutes - DISABLED FOR TESTING
       
       return results;
     } catch (error) {
@@ -170,13 +186,14 @@ export class AnalyticsService {
    */
   async getReportsChannelSummary(filters: DataFilters): Promise<any[]> {
     const allowEmpty = process.env.ALLOW_EMPTY_DATA !== 'false';
-    const cacheKey = `reports_channel_${JSON.stringify(filters)}`;
+    // Disable caching temporarily to ensure fresh data
+    // const cacheKey = `reports_channel_${JSON.stringify(filters)}`;
     
-    // Check cache first
-    const cached = await cacheService.get<any[]>(cacheKey);
-    if (cached) {
-      return cached;
-    }
+    // Check cache first - DISABLED FOR TESTING
+    // const cached = await cacheService.get<any[]>(cacheKey);
+    // if (cached) {
+    //   return cached;
+    // }
 
     try {
       const azureService = getAzureService();
@@ -188,7 +205,22 @@ export class AnalyticsService {
         console.log('Available columns:', Object.keys(data[0]));
       }
       
-      const filteredData = this.applyFilters(data, filters);
+      // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+      // Only apply non-year filters to preserve data for both current and last year
+      const reportsFilters = { ...filters };
+      delete reportsFilters.year; // Remove year filter to get all years
+      
+      // CRITICAL FIX: Set period to MTD when month is specified to enable month filtering
+      if (filters.month && filters.month !== 'All') {
+        reportsFilters.period = 'MTD';
+        // CRITICAL: Also remove year from the period logic to prevent filtering
+        delete reportsFilters.year;
+      }
+      
+      // CRITICAL: Add flag to skip year filtering for reports
+      reportsFilters.skipYearFilter = true;
+      
+      const filteredData = this.applyFilters(data, reportsFilters);
       console.log(`Filtered data length: ${filteredData.length}`);
       
       const channels = [
@@ -233,8 +265,8 @@ export class AnalyticsService {
       );
       results.push(groceryWholesaleUKNI);
 
-      // Cache the result
-      await cacheService.set(cacheKey, results, 1800); // 30 minutes
+      // Cache the result - DISABLED FOR TESTING
+      // await cacheService.set(cacheKey, results, 1800); // 30 minutes
       
       return results;
     } catch (error) {
@@ -650,7 +682,9 @@ export class AnalyticsService {
       const years = [...new Set(filtered.map(r => r.Year))].filter(Boolean) as number[];
       const latestYear = years.length ? Math.max(...years) : undefined;
       const targetYear = filters.year || latestYear;
-      if (targetYear) {
+      
+      // CRITICAL: Skip year filtering for reports to allow year-over-year comparisons
+      if (targetYear && !filters.skipYearFilter) {
         filtered = filtered.filter(row => row.Year === targetYear);
       }
 
@@ -1805,13 +1839,23 @@ export class AnalyticsService {
     
     console.log(`\n=== Calculating Row Data for ${rowName} (${dimension}) ===`);
     console.log('Requested Year:', requestedYear);
+    console.log('Month filter:', filters.month);
     console.log('Is YTD:', isYTD);
     console.log('Filters:', filters);
+    
+    // CRITICAL: Force month filtering when month is specified
+    if (filters.month && filters.month !== 'All') {
+      console.log(`🎯 FORCING MONTH FILTERING: ${filters.month}`);
+    }
     console.log('Data length:', data.length);
     
     // Debug: Check what years are available in the data
-    const availableYears = [...new Set(data.map(row => row.Year))].sort();
+    const availableYears = [...new Set(data.map(row => typeof row.Year === 'string' ? parseInt(row.Year) : row.Year))].sort();
     console.log('Available years in data:', availableYears);
+    
+    // Debug: Check what months are available in the data
+    const availableMonths = [...new Set(data.map(row => row['Month Name']))].sort();
+    console.log('Available months in data:', availableMonths);
     
     // Determine the actual years to use for comparison
     let currentYear, lastYear;
@@ -1819,7 +1863,7 @@ export class AnalyticsService {
     if (availableYears.includes(requestedYear)) {
       // Requested year exists, use it as current year
       currentYear = requestedYear;
-      lastYear = requestedYear - 1;
+      lastYear = currentYear - 1;
     } else {
       // Requested year doesn't exist, use the latest available year as current
       currentYear = Math.max(...availableYears);
@@ -1835,6 +1879,7 @@ export class AnalyticsService {
     console.log(`Has ${lastYear} data:`, hasLastYearData);
 
     // Formula 1: Cases YTD = SUMIFS for current year (YTD or specific month)
+    console.log(`🔍 About to call SUMIFS for Cases with month: ${isYTD ? 'undefined (YTD)' : filters.month}`);
     const casesYTD = this.reportsSumifs(data, 'Cases', {
       year: currentYear,
       month: isYTD ? undefined : filters.month,
@@ -1951,6 +1996,7 @@ export class AnalyticsService {
       },
       fGP: {
         ytd: Math.round(fGPYTD),
+        ly: Math.round(fGPLY),
         lyVar: Math.round(fGPLYVar),
         lyVarPercent: Math.round(fGPLYVarPercent * 10) / 10
       },
@@ -1963,6 +2009,20 @@ export class AnalyticsService {
         cyVLy: Math.round(fGPFY24CYVLy * 10) / 10
       }
     };
+  }
+
+  /**
+   * Map report business areas to CSV business areas
+   */
+  private mapBusinessArea(reportBusinessArea: string): string[] {
+    const businessAreaMapping: { [key: string]: string[] } = {
+      'Food': ['Food', 'Household & Beauty'], // Map Food to both Food and Household & Beauty
+      'Household': ['Household', 'Household & Beauty'],
+      'Brillo & KMPL': ['Brillo & KMPL', 'Brillo', 'KMPL'],
+      'Kinetica': ['Kinetica']
+    };
+    
+    return businessAreaMapping[reportBusinessArea] || [reportBusinessArea];
   }
 
   /**
@@ -1988,7 +2048,7 @@ export class AnalyticsService {
     console.log(`Data length: ${data.length}`);
     
     // Debug: Check what years are available in the data
-    const availableYears = [...new Set(data.map(row => row.Year))].sort();
+    const availableYears = [...new Set(data.map(row => typeof row.Year === 'string' ? parseInt(row.Year) : row.Year))].sort();
     console.log(`Available years in data:`, availableYears);
     
     // Debug: Check if the requested year exists
@@ -2004,9 +2064,20 @@ export class AnalyticsService {
     let matchCount = 0;
     const result = data.reduce((sum, row) => {
       // Check all criteria
-      if (criteria.year !== undefined && row.Year !== criteria.year) return sum;
-      if (criteria.month !== undefined && row['Month Name'] !== criteria.month) return sum;
-      if (criteria.businessArea !== undefined && criteria.businessArea !== 'All' && row.Business !== criteria.businessArea) return sum;
+      if (criteria.year !== undefined && (typeof row.Year === 'string' ? parseInt(row.Year) : row.Year) !== criteria.year) return sum;
+      if (criteria.month !== undefined && row['Month Name'] !== criteria.month) {
+        // Only log first few mismatches to avoid spam
+        if (matchCount < 3) {
+          console.log(`❌ Month mismatch: CSV has "${row['Month Name']}", looking for "${criteria.month}"`);
+        }
+        return sum;
+      }
+      
+      // Business area check with mapping
+      if (criteria.businessArea !== undefined && criteria.businessArea !== 'All') {
+        const mappedBusinessAreas = this.mapBusinessArea(criteria.businessArea);
+        if (!mappedBusinessAreas.includes(row.Business)) return sum;
+      }
       if (criteria.channel !== undefined && criteria.channel !== 'All' && row.Channel !== criteria.channel) return sum;
       if (criteria.customer !== undefined && criteria.customer !== 'All' && row.Customer !== criteria.customer) return sum;
       if (criteria.brand !== undefined && criteria.brand !== 'All' && row.Brand !== criteria.brand) return sum;
