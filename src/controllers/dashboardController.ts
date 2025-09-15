@@ -685,7 +685,9 @@ export class DashboardController {
   async getReportsBusinessAreaSummary(req: Request, res: Response) {
     try {
       logger.info('Getting reports business area summary');
+      console.log('🔍 Request query params:', req.query);
       const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
       const user = (req as any).user || {};
       Object.assign(filters, {
         allowedBusinessAreas: user.allowedBusinessAreas,
@@ -742,6 +744,117 @@ export class DashboardController {
         error: {
           code: 'REPORTS_CHANNEL_ERROR',
           message: 'Failed to get reports channel summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get Trend by Month summary data
+   * Shows monthly performance with YTD, LY, and variance calculations
+   */
+  async getTrendByMonthSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting trend by month summary');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getTrendByMonthSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting trend by month summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'TREND_BY_MONTH_ERROR',
+          message: 'Failed to get trend by month summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get Customer summary data
+   * Shows customer-level performance with YTD, LY, and variance calculations
+   */
+  async getCustomerSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting customer summary');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getCustomerSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting customer summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'CUSTOMER_SUMMARY_ERROR',
+          message: 'Failed to get customer summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get Total Brands summary data
+   * Shows brand-level performance with YTD, LY, and variance calculations
+   */
+  async getTotalBrandsSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting total brands summary');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getTotalBrandsSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting total brands summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'TOTAL_BRANDS_ERROR',
+          message: 'Failed to get total brands summary',
           details: error instanceof Error ? error.message : 'Unknown error'
         }
       });

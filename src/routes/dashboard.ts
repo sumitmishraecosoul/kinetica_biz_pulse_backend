@@ -178,6 +178,27 @@ router.get('/reports/business-area-summary', validateQuery, dashboardController.
  */
 router.get('/reports/channel-summary', validateQuery, dashboardController.getReportsChannelSummary.bind(dashboardController));
 
+/**
+ * @route GET /api/v1/dashboard/reports/trend-by-month
+ * @desc Get trend by month summary with monthly performance data
+ * @access Public
+ */
+router.get('/reports/trend-by-month', validateQuery, dashboardController.getTrendByMonthSummary.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/customer-summary
+ * @desc Get customer summary with customer-level performance data
+ * @access Public
+ */
+router.get('/reports/customer-summary', validateQuery, dashboardController.getCustomerSummary.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/total-brands
+ * @desc Get total brands summary with brand-level performance data
+ * @access Public
+ */
+router.get('/reports/total-brands', validateQuery, dashboardController.getTotalBrandsSummary.bind(dashboardController));
+
   // Dashboard Charts endpoints
   router.post('/fgp-by-business', async (req, res) => {
     try {

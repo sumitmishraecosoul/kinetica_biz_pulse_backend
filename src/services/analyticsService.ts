@@ -1880,6 +1880,7 @@ export class AnalyticsService {
 
     // Formula 1: Cases YTD = SUMIFS for current year (YTD or specific month)
     console.log(`🔍 About to call SUMIFS for Cases with month: ${isYTD ? 'undefined (YTD)' : filters.month}`);
+    console.log(`🔍 Row Name: ${rowName}, Dimension: ${dimension}`);
     const casesYTD = this.reportsSumifs(data, 'Cases', {
       year: currentYear,
       month: isYTD ? undefined : filters.month,
@@ -1890,6 +1891,7 @@ export class AnalyticsService {
       category: filters.category,
       subCategory: filters.subCategory
     });
+    console.log(`🔍 Cases YTD result: ${casesYTD}`);
 
     // Formula 2: Cases LY = SUMIFS for last year (same period)
     const casesLY = this.reportsSumifs(data, 'Cases', {
@@ -1902,6 +1904,7 @@ export class AnalyticsService {
       category: filters.category,
       subCategory: filters.subCategory
     });
+    console.log(`🔍 Cases LY result: ${casesLY}`);
 
     // Formula 3: Cases LY Var = Current Year - Last Year
     const casesLYVar = casesYTD - casesLY;
@@ -2016,8 +2019,8 @@ export class AnalyticsService {
    */
   private mapBusinessArea(reportBusinessArea: string): string[] {
     const businessAreaMapping: { [key: string]: string[] } = {
-      'Food': ['Food', 'Household & Beauty'], // Map Food to both Food and Household & Beauty
-      'Household': ['Household', 'Household & Beauty'],
+      'Food': ['Food'], // Map Food to only Food
+      'Household': ['Household & Beauty'], // Map Household to Household & Beauty
       'Brillo & KMPL': ['Brillo & KMPL', 'Brillo', 'KMPL'],
       'Kinetica': ['Kinetica']
     };
@@ -2102,6 +2105,7 @@ export class AnalyticsService {
     
     console.log(`Total matches: ${matchCount}`);
     console.log(`SUMIFS result: ${result}`);
+    console.log(`SUMIFS Debug - Final result for ${sumColumn}: ${result}`);
     return result;
   }
 
@@ -2140,6 +2144,7 @@ export class AnalyticsService {
         },
         fGP: {
           ytd: acc.fGP.ytd + row.fGP.ytd,
+          ly: acc.fGP.ly + row.fGP.ly,
           lyVar: acc.fGP.lyVar + row.fGP.lyVar,
           lyVarPercent: 0 // Will be calculated
         },
@@ -2155,7 +2160,7 @@ export class AnalyticsService {
     }, {
       cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
       gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
-      fGP: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
       fGPPercent: { ytd: 0, lyVar: 0 },
       fGPFY24: { ytd: 0, cyVLy: 0 }
     });
@@ -2163,9 +2168,8 @@ export class AnalyticsService {
     // Calculate percentages for total
     total.cases.lyVarPercent = this.reportsIferror(total.cases.lyVar / Math.abs(total.cases.ly), 0) * 100;
     total.gSales.lyVarPercent = this.reportsIferror(total.gSales.lyVar / Math.abs(total.gSales.ly), 0) * 100;
-    // For fGP, we need to calculate LY from YTD - LYVar
-    const fGPLY = total.fGP.ytd - total.fGP.lyVar;
-    total.fGP.lyVarPercent = this.reportsIferror(total.fGP.lyVar / Math.abs(fGPLY), 0) * 100;
+    // For fGP, use the calculated LY value
+    total.fGP.lyVarPercent = this.reportsIferror(total.fGP.lyVar / Math.abs(total.fGP.ly), 0) * 100;
     total.fGPPercent.ytd = this.reportsIferror(total.fGP.ytd / total.gSales.ytd, 0) * 100;
     total.fGPFY24.cyVLy = this.reportsIferror(total.fGP.ytd / Math.abs(total.fGPFY24.ytd), 0) * 100;
 
@@ -2297,6 +2301,824 @@ export class AnalyticsService {
       name: combinedName,
       ...total
     };
+  }
+
+  /**
+   * Calculate brand row data for Total Brands report
+   */
+  private calculateBrandRowData(
+    data: any[], 
+    brandName: string, 
+    filters: DataFilters
+  ) {
+    const requestedYear = filters.year || new Date().getFullYear();
+    const isYTD = !filters.month || filters.month === 'All';
+    
+    console.log(`\n=== Calculating Brand Row Data for ${brandName} ===`);
+    console.log('Requested Year:', requestedYear);
+    console.log('Month:', filters.month || 'All (YTD)');
+    console.log('isYTD:', isYTD);
+
+    // Formula 1: Cases YTD = SUMIFS for current year (YTD or specific month)
+    console.log(`🔍 About to call SUMIFS for Cases with month: ${isYTD ? 'undefined (YTD)' : filters.month}`);
+    console.log(`🔍 Brand Name: ${brandName}`);
+    const casesYTD = this.reportsSumifs(data, 'Cases', {
+      year: requestedYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: brandName,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 2: Cases LY = SUMIFS for last year (same period)
+    const casesLY = this.reportsSumifs(data, 'Cases', {
+      year: requestedYear - 1,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: brandName,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 3: Cases LY VAR = Cases YTD - Cases LY
+    const casesLYVar = casesYTD - casesLY;
+
+    // Formula 4: Cases LY VAR % = IFERROR(Cases LY VAR / ABS(Cases LY), 0) * 100
+    const casesLYVarPercent = this.reportsIferror(casesLYVar / Math.abs(casesLY), 0) * 100;
+
+    // Similar calculations for gSales
+    const gSalesYTD = this.reportsSumifs(data, 'gSales', {
+      year: requestedYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: brandName,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const gSalesLY = this.reportsSumifs(data, 'gSales', {
+      year: requestedYear - 1,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: brandName,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const gSalesLYVar = gSalesYTD - gSalesLY;
+    const gSalesLYVarPercent = this.reportsIferror(gSalesLYVar / Math.abs(gSalesLY), 0) * 100;
+
+    // Similar calculations for fGP
+    const fGPYTD = this.reportsSumifs(data, 'fGP', {
+      year: requestedYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: brandName,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const fGPLY = this.reportsSumifs(data, 'fGP', {
+      year: requestedYear - 1,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: brandName,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const fGPLYVar = fGPYTD - fGPLY;
+    const fGPLYVarPercent = this.reportsIferror(fGPLYVar / Math.abs(fGPLY), 0) * 100;
+
+    // fGP % calculations
+    const fGPPercentYTD = this.reportsIferror(fGPYTD / gSalesYTD, 0) * 100;
+    const fGPPercentLY = this.reportsIferror(fGPLY / gSalesLY, 0) * 100;
+    const fGPPercentLYVar = fGPPercentYTD - fGPPercentLY;
+
+    // fGP FY24 calculations (using current year data)
+    const fGPFY24YTD = fGPYTD;
+    const fGPFY24CYVLY = this.reportsIferror(fGPYTD / Math.abs(fGPLY), 0) * 100;
+
+    console.log(`✅ Brand ${brandName} calculated:`, {
+      cases: { ytd: casesYTD, ly: casesLY, lyVar: casesLYVar, lyVarPercent: casesLYVarPercent },
+      gSales: { ytd: gSalesYTD, ly: gSalesLY, lyVar: gSalesLYVar, lyVarPercent: gSalesLYVarPercent },
+      fGP: { ytd: fGPYTD, ly: fGPLY, lyVar: fGPLYVar, lyVarPercent: fGPLYVarPercent }
+    });
+
+    return {
+      name: brandName,
+      cases: {
+        ytd: casesYTD,
+        ly: casesLY,
+        lyVar: casesLYVar,
+        lyVarPercent: casesLYVarPercent
+      },
+      gSales: {
+        ytd: gSalesYTD,
+        ly: gSalesLY,
+        lyVar: gSalesLYVar,
+        lyVarPercent: gSalesLYVarPercent
+      },
+      fGP: {
+        ytd: fGPYTD,
+        ly: fGPLY,
+        lyVar: fGPLYVar,
+        lyVarPercent: fGPLYVarPercent
+      },
+      fGPPercent: {
+        ytd: fGPPercentYTD,
+        ly: fGPPercentLY,
+        lyVar: fGPPercentLYVar
+      },
+      fGPFY24: {
+        ytd: fGPFY24YTD,
+        cyVLy: fGPFY24CYVLY
+      }
+    };
+  }
+
+  /**
+   * Get Customer summary data
+   * Shows customer-level performance with YTD, LY, and variance calculations
+   */
+  async getCustomerSummary(filters: any): Promise<any[]> {
+    console.log('🔍 getCustomerSummary called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 Processing Customer Summary - Year: ${currentYear}, Month: ${filters.month || 'All (YTD)'}, isYTD: ${isYTD}`);
+
+    // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+    // Only apply non-year filters to preserve data for both current and last year
+    const reportsFilters = { ...filters };
+    delete reportsFilters.year; // Remove year filter to get all years
+    
+    // CRITICAL FIX: Set period to MTD when month is specified to enable month filtering
+    if (filters.month && filters.month !== 'All') {
+      reportsFilters.period = 'MTD';
+      // CRITICAL: Also remove year from the period logic to prevent filtering
+      delete reportsFilters.year;
+    }
+    
+    // CRITICAL: Add flag to skip year filtering for reports
+    reportsFilters.skipYearFilter = true;
+    
+    const filteredData = this.applyFilters(data, reportsFilters);
+    console.log(`🔍 After applying filters: ${filteredData.length} rows`);
+    
+    const uniqueCustomers = [...new Set(filteredData.map((row: any) => row.Customer))].filter((customer: any) => customer && typeof customer === 'string' && customer.trim() !== '');
+    
+    console.log(`🔍 Found ${uniqueCustomers.length} unique customers:`, uniqueCustomers.slice(0, 10));
+
+    const customerRows = [];
+
+    for (const customer of uniqueCustomers) {
+      console.log(`🔍 Processing customer: ${customer}`);
+      
+      const customerRow = this.calculateCustomerRowData(
+        filteredData,
+        customer,
+        {
+          year: currentYear,
+          month: filters.month,
+          businessArea: filters.businessArea,
+          channel: filters.channel,
+          customer: customer,
+          brand: filters.brand,
+          category: filters.category,
+          subCategory: filters.subCategory
+        } as DataFilters
+      );
+
+      customerRows.push(customerRow);
+    }
+
+    // Sort customers by Cases YTD descending
+    customerRows.sort((a, b) => b.cases.ytd - a.cases.ytd);
+
+    // Calculate totals
+    const totalRow = this.calculateReportsTotalRow(customerRows);
+    totalRow.name = 'Customers Total';
+    customerRows.push(totalRow);
+
+    console.log(`🔍 Customer summary completed. Generated ${customerRows.length} rows`);
+    return customerRows;
+  }
+
+  /**
+   * Calculate customer row data for Customer report
+   */
+  private calculateCustomerRowData(
+    data: any[], 
+    customerName: string, 
+    filters: DataFilters
+  ) {
+    const requestedYear = filters.year || new Date().getFullYear();
+    const isYTD = !filters.month || filters.month === 'All';
+    
+    console.log(`\n=== Calculating Customer Row Data for ${customerName} ===`);
+    console.log('Requested Year:', requestedYear);
+    console.log('Month:', filters.month || 'All (YTD)');
+    console.log('isYTD:', isYTD);
+
+    // Formula 1: Cases YTD = SUMIFS for current year (YTD or specific month)
+    const casesYTD = this.reportsSumifs(data, 'Cases', {
+      year: requestedYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: customerName,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 2: Cases LY = SUMIFS for last year (same period)
+    const casesLY = this.reportsSumifs(data, 'Cases', {
+      year: requestedYear - 1,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: customerName,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 3: Cases LY VAR = Cases YTD - Cases LY
+    const casesLYVar = casesYTD - casesLY;
+
+    // Formula 4: Cases LY VAR % = IFERROR(Cases LY VAR / ABS(Cases LY), 0) * 100
+    const casesLYVarPercent = this.reportsIferror(casesLYVar / Math.abs(casesLY), 0) * 100;
+
+    // Similar calculations for gSales
+    const gSalesYTD = this.reportsSumifs(data, 'gSales', {
+      year: requestedYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: customerName,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const gSalesLY = this.reportsSumifs(data, 'gSales', {
+      year: requestedYear - 1,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: customerName,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const gSalesLYVar = gSalesYTD - gSalesLY;
+    const gSalesLYVarPercent = this.reportsIferror(gSalesLYVar / Math.abs(gSalesLY), 0) * 100;
+
+    // Similar calculations for fGP
+    const fGPYTD = this.reportsSumifs(data, 'fGP', {
+      year: requestedYear,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: customerName,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const fGPLY = this.reportsSumifs(data, 'fGP', {
+      year: requestedYear - 1,
+      month: isYTD ? undefined : filters.month,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: customerName,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const fGPLYVar = fGPYTD - fGPLY;
+    const fGPLYVarPercent = this.reportsIferror(fGPLYVar / Math.abs(fGPLY), 0) * 100;
+
+    // fGP % calculations
+    const fGPPercentYTD = this.reportsIferror(fGPYTD / gSalesYTD, 0) * 100;
+    const fGPPercentLY = this.reportsIferror(fGPLY / gSalesLY, 0) * 100;
+    const fGPPercentLYVar = fGPPercentYTD - fGPPercentLY;
+
+    // fGP FY24 calculations (using current year data)
+    const fGPFY24YTD = fGPYTD;
+    const fGPFY24CYVLY = this.reportsIferror(fGPYTD / Math.abs(fGPLY), 0) * 100;
+
+    console.log(`✅ Customer ${customerName} calculated:`, {
+      cases: { ytd: casesYTD, ly: casesLY, lyVar: casesLYVar, lyVarPercent: casesLYVarPercent },
+      gSales: { ytd: gSalesYTD, ly: gSalesLY, lyVar: gSalesLYVar, lyVarPercent: gSalesLYVarPercent },
+      fGP: { ytd: fGPYTD, ly: fGPLY, lyVar: fGPLYVar, lyVarPercent: fGPLYVarPercent }
+    });
+
+    return {
+      name: customerName,
+      cases: {
+        ytd: casesYTD,
+        ly: casesLY,
+        lyVar: casesLYVar,
+        lyVarPercent: casesLYVarPercent
+      },
+      gSales: {
+        ytd: gSalesYTD,
+        ly: gSalesLY,
+        lyVar: gSalesLYVar,
+        lyVarPercent: gSalesLYVarPercent
+      },
+      fGP: {
+        ytd: fGPYTD,
+        ly: fGPLY,
+        lyVar: fGPLYVar,
+        lyVarPercent: fGPLYVarPercent
+      },
+      fGPPercent: {
+        ytd: fGPPercentYTD,
+        ly: fGPPercentLY,
+        lyVar: fGPPercentLYVar
+      },
+      fGPFY24: {
+        ytd: fGPFY24YTD,
+        cyVLy: fGPFY24CYVLY
+      }
+    };
+  }
+
+  /**
+   * Get Trend by Month summary data
+   * Shows monthly performance with YTD, LY, and variance calculations
+   */
+  async getTrendByMonthSummary(filters: any): Promise<any[]> {
+    console.log('🔍 getTrendByMonthSummary called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+
+    console.log(`🔍 Processing Trend by Month - Year: ${currentYear}`);
+
+    // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+    // Only apply non-year filters to preserve data for both current and last year
+    const reportsFilters = { ...filters };
+    delete reportsFilters.year; // Remove year filter to get all years
+    
+    // CRITICAL: Add flag to skip year filtering for reports
+    reportsFilters.skipYearFilter = true;
+    
+    const filteredData = this.applyFilters(data, reportsFilters);
+    console.log(`🔍 After applying filters: ${filteredData.length} rows`);
+    
+    // Get all months from the data
+    const allMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    console.log(`🔍 Processing ${allMonths.length} months for trend analysis`);
+
+    // Pre-calculate all monthly data in one pass for better performance
+    const monthlyData = this.calculateAllMonthlyData(filteredData, allMonths, currentYear, filters);
+    
+    // Calculate totals
+    const totalRow = this.calculateTrendTotalRow(monthlyData);
+    totalRow.name = 'Total';
+    monthlyData.push(totalRow);
+
+    console.log(`🔍 Trend by month summary completed. Generated ${monthlyData.length} rows`);
+    return monthlyData;
+  }
+
+  /**
+   * Calculate all monthly data in one efficient pass
+   */
+  private calculateAllMonthlyData(data: any[], months: string[], currentYear: number, filters: any) {
+    const monthlyResults = months.map(month => ({
+      name: month,
+      cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGPPercent: { ytd: 0, ly: 0, lyVar: 0 },
+      fullMonth2024: { gSales: 0, fGP: 0, fGPPercent: 0 }
+    }));
+
+    // Single pass through data to calculate all months
+    for (const row of data) {
+      const year = parseInt(row.Year);
+      const month = row['Month Name'];
+      const monthIndex = months.indexOf(month);
+      
+      if (monthIndex === -1) continue; // Skip invalid months
+      
+      // Apply additional filters
+      if (filters.businessArea && filters.businessArea !== 'All' && row.Business !== filters.businessArea) continue;
+      if (filters.channel && filters.channel !== 'All' && row.Channel !== filters.channel) continue;
+      if (filters.customer && filters.customer !== 'All' && row.Customer !== filters.customer) continue;
+      if (filters.brand && filters.brand !== 'All' && row.Brand !== filters.brand) continue;
+      if (filters.category && filters.category !== 'All' && row.Category !== filters.category) continue;
+      if (filters.subCategory && filters.subCategory !== 'All' && row['Sub-Cat'] !== filters.subCategory) continue;
+
+      const cases = parseFloat(row.Cases) || 0;
+      const gSales = parseFloat(row.gSales) || 0;
+      const fGP = parseFloat(row.fGP) || 0;
+
+      if (year === currentYear) {
+        // Current year data
+        monthlyResults[monthIndex].cases.ytd += cases;
+        monthlyResults[monthIndex].gSales.ytd += gSales;
+        monthlyResults[monthIndex].fGP.ytd += fGP;
+      } else if (year === currentYear - 1) {
+        // Last year data
+        monthlyResults[monthIndex].cases.ly += cases;
+        monthlyResults[monthIndex].gSales.ly += gSales;
+        monthlyResults[monthIndex].fGP.ly += fGP;
+        monthlyResults[monthIndex].fullMonth2024.gSales += gSales;
+        monthlyResults[monthIndex].fullMonth2024.fGP += fGP;
+      }
+    }
+
+    // Calculate variances and percentages
+    for (const monthData of monthlyResults) {
+      // Calculate variances
+      monthData.cases.lyVar = monthData.cases.ytd - monthData.cases.ly;
+      monthData.cases.lyVarPercent = this.reportsIferror(monthData.cases.lyVar / Math.abs(monthData.cases.ly), 0) * 100;
+      
+      monthData.gSales.lyVar = monthData.gSales.ytd - monthData.gSales.ly;
+      monthData.gSales.lyVarPercent = this.reportsIferror(monthData.gSales.lyVar / Math.abs(monthData.gSales.ly), 0) * 100;
+      
+      monthData.fGP.lyVar = monthData.fGP.ytd - monthData.fGP.ly;
+      monthData.fGP.lyVarPercent = this.reportsIferror(monthData.fGP.lyVar / Math.abs(monthData.fGP.ly), 0) * 100;
+
+      // Calculate fGP percentages
+      monthData.fGPPercent.ytd = this.reportsIferror(monthData.fGP.ytd / monthData.gSales.ytd, 0) * 100;
+      monthData.fGPPercent.ly = this.reportsIferror(monthData.fGP.ly / monthData.gSales.ly, 0) * 100;
+      monthData.fGPPercent.lyVar = monthData.fGPPercent.ytd - monthData.fGPPercent.ly;
+
+      // Calculate 2024 full month fGP percentage
+      monthData.fullMonth2024.fGPPercent = this.reportsIferror(monthData.fullMonth2024.fGP / monthData.fullMonth2024.gSales, 0) * 100;
+    }
+
+    return monthlyResults;
+  }
+
+  /**
+   * Calculate trend month row data for Trend report
+   */
+  private calculateTrendMonthRowData(
+    data: any[], 
+    monthName: string, 
+    filters: DataFilters
+  ) {
+    const requestedYear = filters.year || new Date().getFullYear();
+    
+    console.log(`\n=== Calculating Trend Month Row Data for ${monthName} ===`);
+    console.log('Requested Year:', requestedYear);
+    console.log('Month:', monthName);
+
+    // Formula 1: Cases 2025 = SUMIFS for current year and specific month
+    const cases2025 = this.reportsSumifs(data, 'Cases', {
+      year: requestedYear,
+      month: monthName,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 2: Cases 2024 = SUMIFS for last year and same month
+    const cases2024 = this.reportsSumifs(data, 'Cases', {
+      year: requestedYear - 1,
+      month: monthName,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    // Formula 3: Cases VAR = Cases 2025 - Cases 2024
+    const casesVar = cases2025 - cases2024;
+
+    // Formula 4: Cases VAR % = IFERROR(Cases VAR / ABS(Cases 2024), 0) * 100
+    const casesVarPercent = this.reportsIferror(casesVar / Math.abs(cases2024), 0) * 100;
+
+    // Similar calculations for gSales
+    const gSales2025 = this.reportsSumifs(data, 'gSales', {
+      year: requestedYear,
+      month: monthName,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const gSales2024 = this.reportsSumifs(data, 'gSales', {
+      year: requestedYear - 1,
+      month: monthName,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const gSalesVar = gSales2025 - gSales2024;
+    const gSalesVarPercent = this.reportsIferror(gSalesVar / Math.abs(gSales2024), 0) * 100;
+
+    // Similar calculations for fGP
+    const fGP2025 = this.reportsSumifs(data, 'fGP', {
+      year: requestedYear,
+      month: monthName,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const fGP2024 = this.reportsSumifs(data, 'fGP', {
+      year: requestedYear - 1,
+      month: monthName,
+      businessArea: filters.businessArea,
+      channel: filters.channel,
+      customer: filters.customer,
+      brand: filters.brand,
+      category: filters.category,
+      subCategory: filters.subCategory
+    });
+
+    const fGPVar = fGP2025 - fGP2024;
+    const fGPVarPercent = this.reportsIferror(fGPVar / Math.abs(fGP2024), 0) * 100;
+
+    // fGP % calculations
+    const fGPPercent2025 = this.reportsIferror(fGP2025 / gSales2025, 0) * 100;
+    const fGPPercent2024 = this.reportsIferror(fGP2024 / gSales2024, 0) * 100;
+    const fGPPercentVar = fGPPercent2025 - fGPPercent2024;
+
+    console.log(`✅ Month ${monthName} calculated:`, {
+      cases: { ytd: cases2025, ly: cases2024, lyVar: casesVar, lyVarPercent: casesVarPercent },
+      gSales: { ytd: gSales2025, ly: gSales2024, lyVar: gSalesVar, lyVarPercent: gSalesVarPercent },
+      fGP: { ytd: fGP2025, ly: fGP2024, lyVar: fGPVar, lyVarPercent: fGPVarPercent }
+    });
+
+    return {
+      name: monthName,
+      cases: {
+        ytd: cases2025,
+        ly: cases2024,
+        lyVar: casesVar,
+        lyVarPercent: casesVarPercent
+      },
+      gSales: {
+        ytd: gSales2025,
+        ly: gSales2024,
+        lyVar: gSalesVar,
+        lyVarPercent: gSalesVarPercent
+      },
+      fGP: {
+        ytd: fGP2025,
+        ly: fGP2024,
+        lyVar: fGPVar,
+        lyVarPercent: fGPVarPercent
+      },
+      fGPPercent: {
+        ytd: fGPPercent2025,
+        ly: fGPPercent2024,
+        lyVar: fGPPercentVar
+      },
+      // 2024 Full Month data
+      fullMonth2024: {
+        gSales: gSales2024,
+        fGP: fGP2024,
+        fGPPercent: fGPPercent2024
+      }
+    };
+  }
+
+  /**
+   * Calculate trend total row for Trend report
+   */
+  private calculateTrendTotalRow(monthRows: any[]) {
+    const total = monthRows.reduce((acc, row) => {
+      if (row.name === 'Total') return acc; // Skip if already a total row
+      
+      acc.cases.ytd += row.cases.ytd;
+      acc.cases.ly += row.cases.ly;
+      acc.gSales.ytd += row.gSales.ytd;
+      acc.gSales.ly += row.gSales.ly;
+      acc.fGP.ytd += row.fGP.ytd;
+      acc.fGP.ly += row.fGP.ly;
+      acc.fullMonth2024.gSales += row.fullMonth2024.gSales;
+      acc.fullMonth2024.fGP += row.fullMonth2024.fGP;
+      
+      return acc;
+    }, {
+      name: 'Total',
+      cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGPPercent: { ytd: 0, ly: 0, lyVar: 0 },
+      fullMonth2024: { gSales: 0, fGP: 0, fGPPercent: 0 }
+    });
+
+    // Calculate variances
+    total.cases.lyVar = total.cases.ytd - total.cases.ly;
+    total.cases.lyVarPercent = this.reportsIferror(total.cases.lyVar / Math.abs(total.cases.ly), 0) * 100;
+    
+    total.gSales.lyVar = total.gSales.ytd - total.gSales.ly;
+    total.gSales.lyVarPercent = this.reportsIferror(total.gSales.lyVar / Math.abs(total.gSales.ly), 0) * 100;
+    
+    total.fGP.lyVar = total.fGP.ytd - total.fGP.ly;
+    total.fGP.lyVarPercent = this.reportsIferror(total.fGP.lyVar / Math.abs(total.fGP.ly), 0) * 100;
+
+    // Calculate fGP percentages
+    total.fGPPercent.ytd = this.reportsIferror(total.fGP.ytd / total.gSales.ytd, 0) * 100;
+    total.fGPPercent.ly = this.reportsIferror(total.fGP.ly / total.gSales.ly, 0) * 100;
+    total.fGPPercent.lyVar = total.fGPPercent.ytd - total.fGPPercent.ly;
+
+    // Calculate 2024 full month fGP percentage
+    total.fullMonth2024.fGPPercent = this.reportsIferror(total.fullMonth2024.fGP / total.fullMonth2024.gSales, 0) * 100;
+
+    return total;
+  }
+
+  /**
+   * Get Total Brands summary data
+   * Shows brand-level performance with YTD, LY, and variance calculations
+   */
+  async getTotalBrandsSummary(filters: any): Promise<any[]> {
+    console.log('🔍 getTotalBrandsSummary called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 Processing Total Brands - Year: ${currentYear}, Month: ${filters.month || 'All (YTD)'}, isYTD: ${isYTD}`);
+
+    // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+    // Only apply non-year filters to preserve data for both current and last year
+    const reportsFilters = { ...filters };
+    delete reportsFilters.year; // Remove year filter to get all years
+    
+    // CRITICAL FIX: Set period to MTD when month is specified to enable month filtering
+    if (filters.month && filters.month !== 'All') {
+      reportsFilters.period = 'MTD';
+      // CRITICAL: Also remove year from the period logic to prevent filtering
+      delete reportsFilters.year;
+    }
+    
+    // CRITICAL: Add flag to skip year filtering for reports
+    reportsFilters.skipYearFilter = true;
+    
+    // Apply ROI Only filter if specified
+    if (filters.roiOnly) {
+      console.log('🔍 Applying ROI Only filter');
+      const roiFilteredData = data.filter((row: any) => 
+        row['UK Customer'] === 'ROI' || 
+        row.Customer === 'ROI' ||
+        row.Customer?.includes('ROI')
+      );
+      console.log(`🔍 ROI Only filter applied. Data reduced from ${data.length} to ${roiFilteredData.length} rows`);
+      
+      // Apply other filters to ROI-filtered data
+      const filteredData = this.applyFilters(roiFilteredData, reportsFilters);
+      console.log(`🔍 After applying other filters: ${filteredData.length} rows`);
+      
+      const uniqueBrands = [...new Set(filteredData.map((row: any) => row.Brand))].filter((brand: any) => brand && typeof brand === 'string' && brand.trim() !== '');
+      
+      console.log(`🔍 Found ${uniqueBrands.length} unique brands:`, uniqueBrands.slice(0, 10));
+
+      const brandRows = [];
+
+      for (const brand of uniqueBrands) {
+        console.log(`🔍 Processing brand: ${brand}`);
+        
+        const brandRow = this.calculateBrandRowData(
+          filteredData,
+          brand,
+          {
+            year: currentYear,
+            month: filters.month,
+            businessArea: filters.businessArea,
+            channel: filters.channel,
+            customer: filters.customer,
+            brand: brand,
+            category: filters.category,
+            subCategory: filters.subCategory
+          } as DataFilters
+        );
+
+        brandRows.push(brandRow);
+      }
+
+      // Sort brands by Cases YTD descending
+      brandRows.sort((a, b) => b.cases.ytd - a.cases.ytd);
+
+      // Calculate totals
+      const totalRow = this.calculateReportsTotalRow(brandRows);
+      totalRow.name = 'Brands Total';
+      brandRows.push(totalRow);
+
+      // Add Private Label section if needed
+      const privateLabelBrands = brandRows.filter(row => 
+        row.name.toLowerCase().includes('powerforce') || 
+        row.name.toLowerCase().includes('supervalu') ||
+        row.name.toLowerCase().includes('private')
+      );
+
+      if (privateLabelBrands.length > 0) {
+        const privateLabelTotal = this.calculateReportsTotalRow(privateLabelBrands);
+        privateLabelTotal.name = 'Private Label';
+        brandRows.push(privateLabelTotal);
+      }
+
+      console.log(`🔍 Total Brands summary completed. Generated ${brandRows.length} rows`);
+      return brandRows;
+    } else {
+      // No ROI filter - use all data
+      const filteredData = this.applyFilters(data, reportsFilters);
+      console.log(`🔍 After applying filters: ${filteredData.length} rows`);
+      
+      const uniqueBrands = [...new Set(filteredData.map((row: any) => row.Brand))].filter((brand: any) => brand && typeof brand === 'string' && brand.trim() !== '');
+      
+      console.log(`🔍 Found ${uniqueBrands.length} unique brands:`, uniqueBrands.slice(0, 10));
+
+      const brandRows = [];
+
+      for (const brand of uniqueBrands) {
+        console.log(`🔍 Processing brand: ${brand}`);
+        
+        const brandRow = this.calculateBrandRowData(
+          filteredData,
+          brand,
+          {
+            year: currentYear,
+            month: filters.month,
+            businessArea: filters.businessArea,
+            channel: filters.channel,
+            customer: filters.customer,
+            brand: brand,
+            category: filters.category,
+            subCategory: filters.subCategory
+          } as DataFilters
+        );
+
+        brandRows.push(brandRow);
+      }
+
+      // Sort brands by Cases YTD descending
+      brandRows.sort((a, b) => b.cases.ytd - a.cases.ytd);
+
+      // Calculate totals
+      const totalRow = this.calculateReportsTotalRow(brandRows);
+      totalRow.name = 'Brands Total';
+      brandRows.push(totalRow);
+
+      // Add Private Label section if needed
+      const privateLabelBrands = brandRows.filter(row => 
+        row.name.toLowerCase().includes('powerforce') || 
+        row.name.toLowerCase().includes('supervalu') ||
+        row.name.toLowerCase().includes('private')
+      );
+
+      if (privateLabelBrands.length > 0) {
+        const privateLabelTotal = this.calculateReportsTotalRow(privateLabelBrands);
+        privateLabelTotal.name = 'Private Label';
+        brandRows.push(privateLabelTotal);
+      }
+
+      console.log(`🔍 Total Brands summary completed. Generated ${brandRows.length} rows`);
+      return brandRows;
+    }
   }
 }
 

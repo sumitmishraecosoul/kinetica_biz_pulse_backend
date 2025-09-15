@@ -31,7 +31,8 @@ console.log('\n📋 Individual Environment Variables:');
 console.log('AZURE_STORAGE_ACCOUNT_NAME:', process.env.AZURE_STORAGE_ACCOUNT_NAME || 'NOT SET');
 console.log('AZURE_CONTAINER_NAME:', process.env.AZURE_CONTAINER_NAME || 'NOT SET (will use default: thrive-worklytics)');
 console.log('AZURE_BLOB_FOLDER:', process.env.AZURE_BLOB_FOLDER || 'NOT SET (will use default: Biz-Pulse)');
-console.log('AZURE_CSV_FILENAME:', process.env.AZURE_CSV_FILENAME || 'NOT SET (will use default: Front Office Flash - YTD.csv)');
+// console.log('AZURE_CSV_FILENAME:', process.env.AZURE_CSV_FILENAME || 'NOT SET (will use default: Front Office Flash - YTD.csv)');
+console.log('AZURE_CSV_FILENAME:', process.env.AZURE_CSV_FILENAME || 'NOT SET (will use default: yearly_data.csv)');
 
 // Check for common issues
 console.log('\n🔧 Common Issues Check:');
@@ -44,9 +45,15 @@ console.log('\n📝 Expected Values (from your requirements):');
 console.log('Account Name: kineticadbms');
 console.log('Container Name: thrive-worklytics');
 console.log('Blob Folder: Biz-Pulse');
-console.log('CSV File: Front Office Flash - YTD.csv');
+// console.log('CSV File: Front Office Flash - YTD.csv');
+console.log('CSV File: yearly_data.csv');
 
 console.log('\n✅ Debug complete! Check the values above against your Azure Portal.');
+
+
+
+
+
 
 
 

@@ -40,8 +40,10 @@ async function testAzureConnection() {
     console.log(`✅ Successfully connected to Azure! Found ${blobCount} blobs in container.`);
     
     // Check for our specific file
-    const targetFile = 'Biz-Pulse/Front Office Flash - YTD.csv';
-    const fileExists = blobNames.some(name => name.includes('Front Office Flash - YTD.csv'));
+    // const targetFile = 'Biz-Pulse/Front Office Flash - YTD.csv';
+    const targetFile = 'Biz-Pulse/yearly_data.csv';
+    // const fileExists = blobNames.some(name => name.includes('Front Office Flash - YTD.csv'));
+    const fileExists = blobNames.some(name => name.includes('yearly_data.csv'));
     console.log(`📄 Target file found: ${fileExists ? 'YES' : 'NO'}`);
     
     if (fileExists) {
