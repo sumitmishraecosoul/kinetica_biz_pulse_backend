@@ -179,6 +179,13 @@ router.get('/reports/business-area-summary', validateQuery, dashboardController.
 router.get('/reports/channel-summary', validateQuery, dashboardController.getReportsChannelSummary.bind(dashboardController));
 
 /**
+ * @route GET /api/v1/dashboard/reports/sales-to-fgp
+ * @desc Get sales to fGP summary with detailed sales breakdown data
+ * @access Public
+ */
+router.get('/reports/sales-to-fgp', validateQuery, dashboardController.getSalesToFGPSummary.bind(dashboardController));
+
+/**
  * @route GET /api/v1/dashboard/reports/trend-by-month
  * @desc Get trend by month summary with monthly performance data
  * @access Public
@@ -198,6 +205,27 @@ router.get('/reports/customer-summary', validateQuery, dashboardController.getCu
  * @access Public
  */
 router.get('/reports/total-brands', validateQuery, dashboardController.getTotalBrandsSummary.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/food-brands
+ * @desc Get food brands summary with brand-level performance data
+ * @access Public
+ */
+router.get('/reports/food-brands', validateQuery, dashboardController.getFoodBrandsSummary.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/food-brands-details
+ * @desc Get food brands details with sub-category level performance data
+ * @access Public
+ */
+router.get('/reports/food-brands-details', validateQuery, dashboardController.getFoodBrandsDetails.bind(dashboardController));
+
+/**
+ * @route GET /api/v1/dashboard/reports/household-brands
+ * @desc Get household brands performance data
+ * @access Public
+ */
+router.get('/reports/household-brands', validateQuery, dashboardController.getHouseholdBrands.bind(dashboardController));
 
   // Dashboard Charts endpoints
   router.post('/fgp-by-business', async (req, res) => {

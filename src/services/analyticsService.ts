@@ -2970,6 +2970,136 @@ export class AnalyticsService {
   }
 
   /**
+   * Get Sales to fGP summary data
+   * Shows detailed sales breakdown with dynamic year comparisons (selected year vs previous year)
+   */
+  async getSalesToFGPSummary(filters: any): Promise<any[]> {
+    console.log('🔍 getSalesToFGPSummary called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = parseInt(filters.year) || new Date().getFullYear();
+    const previousYear = currentYear - 1;
+
+    console.log(`🔍 Processing Sales to fGP - Current Year: ${currentYear}, Previous Year: ${previousYear}, Month: ${filters.month || 'All'}`);
+
+    // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+    // Only apply non-year filters to preserve data for both current and previous year
+    const reportsFilters = { ...filters };
+    delete reportsFilters.year; // Remove year filter to get all years
+    
+    // CRITICAL: Add flag to skip year filtering for reports
+    reportsFilters.skipYearFilter = true;
+    
+    const filteredData = this.applyFilters(data, reportsFilters);
+    console.log(`🔍 After applying filters: ${filteredData.length} rows`);
+
+    // Calculate sales breakdown data with dynamic years
+    const salesBreakdown = this.calculateSalesBreakdown(filteredData, currentYear, previousYear, filters);
+
+    console.log(`🔍 Sales to fGP summary completed. Generated ${salesBreakdown.length} rows`);
+    return salesBreakdown;
+  }
+
+  /**
+   * Calculate sales breakdown for Sales to fGP report
+   */
+  private calculateSalesBreakdown(data: any[], currentYear: number, previousYear: number, filters: any) {
+    const breakdown = [
+      { name: 'Cases', field: 'Cases', isPercentage: false },
+      { name: 'gSales', field: 'gSales', isPercentage: false },
+      { name: 'Price Downs', field: 'Price Downs', isPercentage: false },
+      { name: 'Perm. Disc.', field: 'Perm. Disc.', isPercentage: false },
+      { name: 'nSales', field: 'gSales', isPercentage: false }, // Net Sales = gSales - Price Downs - Perm. Disc.
+      { name: 'Group Cost', field: 'Group Cost', isPercentage: false },
+      { name: 'LTA', field: 'LTA', isPercentage: false },
+      { name: 'fGP', field: 'fGP', isPercentage: false }
+    ];
+
+    const results = [];
+
+    for (const item of breakdown) {
+      console.log(`🔍 Calculating ${item.name}...`);
+
+      // Calculate current year data
+      const dataCurrent = this.calculateSalesItemData(data, currentYear, item, filters);
+      
+      // Calculate previous year data
+      const dataPrevious = this.calculateSalesItemData(data, previousYear, item, filters);
+
+      // Calculate percentage of sales for each year
+      const gSalesCurrent = this.calculateSalesItemData(data, currentYear, { name: 'gSales', field: 'gSales' }, filters).value;
+      const gSalesPrevious = this.calculateSalesItemData(data, previousYear, { name: 'gSales', field: 'gSales' }, filters).value;
+
+      let finalValueCurrent = dataCurrent.value;
+      let finalValuePrevious = dataPrevious.value;
+
+      // Special calculation for nSales (Net Sales)
+      if (item.name === 'nSales') {
+        const priceDownsCurrent = this.calculateSalesItemData(data, currentYear, { name: 'Price Downs', field: 'Price Downs' }, filters).value;
+        const permDiscCurrent = this.calculateSalesItemData(data, currentYear, { name: 'Perm. Disc.', field: 'Perm. Disc.' }, filters).value;
+        const priceDownsPrevious = this.calculateSalesItemData(data, previousYear, { name: 'Price Downs', field: 'Price Downs' }, filters).value;
+        const permDiscPrevious = this.calculateSalesItemData(data, previousYear, { name: 'Perm. Disc.', field: 'Perm. Disc.' }, filters).value;
+        
+        finalValueCurrent = dataCurrent.value - priceDownsCurrent - permDiscCurrent;
+        finalValuePrevious = dataPrevious.value - priceDownsPrevious - permDiscPrevious;
+      }
+
+      // Calculate variances
+      const variance = finalValueCurrent - finalValuePrevious;
+      const variancePercent = this.reportsIferror(variance / Math.abs(finalValuePrevious), 0) * 100;
+      
+      const percentSalesCurrent = this.reportsIferror(finalValueCurrent / gSalesCurrent, 0) * 100;
+      const percentSalesPrevious = this.reportsIferror(finalValuePrevious / gSalesPrevious, 0) * 100;
+      const percentSalesVar = percentSalesCurrent - percentSalesPrevious;
+
+      results.push({
+        name: item.name,
+        valueCurrent: finalValueCurrent,
+        valuePrevious: finalValuePrevious,
+        variance: variance,
+        variancePercent: variancePercent,
+        percentSalesCurrent: percentSalesCurrent,
+        percentSalesPrevious: percentSalesPrevious,
+        percentSalesVar: percentSalesVar,
+        currentYear: currentYear,
+        previousYear: previousYear,
+        isBold: item.name === 'fGP' // Make fGP row bold
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Calculate individual sales item data
+   */
+  private calculateSalesItemData(data: any[], year: number, item: any, filters: any) {
+    let total = 0;
+    let count = 0;
+
+    for (const row of data) {
+      const rowYear = parseInt(row.Year);
+      if (rowYear !== year) continue;
+
+      // Apply additional filters
+      if (filters.month && filters.month !== 'All' && row['Month Name'] !== filters.month) continue;
+      if (filters.businessArea && filters.businessArea !== 'All' && row.Business !== filters.businessArea) continue;
+      if (filters.channel && filters.channel !== 'All' && row.Channel !== filters.channel) continue;
+      if (filters.customer && filters.customer !== 'All' && row.Customer !== filters.customer) continue;
+      if (filters.brand && filters.brand !== 'All' && row.Brand !== filters.brand) continue;
+      if (filters.category && filters.category !== 'All' && row.Category !== filters.category) continue;
+      if (filters.subCategory && filters.subCategory !== 'All' && row['Sub-Cat'] !== filters.subCategory) continue;
+
+      const value = parseFloat(row[item.field]) || 0;
+      total += value;
+      count++;
+    }
+
+    return { value: total, count: count };
+  }
+
+  /**
    * Get Total Brands summary data
    * Shows brand-level performance with YTD, LY, and variance calculations
    */
@@ -3119,6 +3249,638 @@ export class AnalyticsService {
       console.log(`🔍 Total Brands summary completed. Generated ${brandRows.length} rows`);
       return brandRows;
     }
+  }
+
+  /**
+   * Get Food Brands summary data
+   * Shows food brand-level performance with YTD, LY, and variance calculations
+   * Groups brands by category: BV Brands - Food, AGC Brands - Food, PL Brands - Food
+   */
+  async getFoodBrandsSummary(filters: any): Promise<any[]> {
+    console.log('🔍 getFoodBrandsSummary called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 Processing Food Brands - Year: ${currentYear}, Month: ${filters.month || 'All (YTD)'}, isYTD: ${isYTD}`);
+
+    // For reports, we need ALL data (not filtered by year) to calculate year-over-year comparisons
+    const reportsFilters = { ...filters };
+    delete reportsFilters.year; // Remove year filter to get all years
+    
+    // Set period to MTD when month is specified to enable month filtering
+    if (filters.month && filters.month !== 'All') {
+      reportsFilters.period = 'MTD';
+      delete reportsFilters.year;
+    }
+    
+    reportsFilters.skipYearFilter = true;
+    
+    // Apply ROI Only filter if specified
+    if (filters.roiOnly) {
+      console.log('🔍 Applying ROI Only filter');
+      const roiFilteredData = data.filter((row: any) => 
+        row['UK Customer'] === 'ROI' || 
+        row.Customer === 'ROI' ||
+        row.Customer?.includes('ROI')
+      );
+      console.log(`🔍 ROI Only filter applied. Data reduced from ${data.length} to ${roiFilteredData.length} rows`);
+      
+      const filteredData = this.applyFilters(roiFilteredData, reportsFilters);
+      console.log(`🔍 After applying other filters: ${filteredData.length} rows`);
+      
+      return this.processFoodBrandsData(filteredData, currentYear, filters);
+    } else {
+      // No ROI filter - use all data
+      const filteredData = this.applyFilters(data, reportsFilters);
+      console.log(`🔍 After applying filters: ${filteredData.length} rows`);
+      
+      return this.processFoodBrandsData(filteredData, currentYear, filters);
+    }
+  }
+
+  /**
+   * Process Food Brands data and group by category
+   */
+  private processFoodBrandsData(filteredData: any[], currentYear: number, filters: any): any[] {
+    // Define food brand categories based on the screenshot
+    const bvBrands = ['McDonnells', 'BV Honey', 'Don Carlos', 'Chivers', 'Homecook', 'Erin', 'Lakeshore', 'Panda', 'Lifeforce', 'GDF', 'Richmond', 'Cali Cali'];
+    const agcBrands = ['Koka', 'Bonne Maman', 'Bensons'];
+    const plBrands = ['Tesco', 'Dunnes'];
+
+    const allFoodBrands = [...bvBrands, ...agcBrands, ...plBrands];
+    
+    // Filter data to only include food brands
+    const foodBrandData = filteredData.filter((row: any) => 
+      allFoodBrands.includes(row.Brand)
+    );
+
+    console.log(`🔍 Found ${foodBrandData.length} rows for food brands`);
+
+    const brandRows = [];
+
+    // Process BV Brands - Food
+    for (const brand of bvBrands) {
+      const brandRow = this.calculateBrandRowData(
+        foodBrandData,
+        brand,
+        {
+          year: currentYear,
+          month: filters.month,
+          businessArea: filters.businessArea,
+          channel: filters.channel,
+          customer: filters.customer,
+          brand: brand,
+          category: filters.category,
+          subCategory: filters.subCategory
+        } as DataFilters
+      );
+
+      if (brandRow.cases.ytd > 0 || brandRow.gSales.ytd > 0 || brandRow.fGP.ytd > 0) {
+        brandRows.push(brandRow);
+      }
+    }
+
+    // Process AGC Brands - Food
+    for (const brand of agcBrands) {
+      const brandRow = this.calculateBrandRowData(
+        foodBrandData,
+        brand,
+        {
+          year: currentYear,
+          month: filters.month,
+          businessArea: filters.businessArea,
+          channel: filters.channel,
+          customer: filters.customer,
+          brand: brand,
+          category: filters.category,
+          subCategory: filters.subCategory
+        } as DataFilters
+      );
+
+      if (brandRow.cases.ytd > 0 || brandRow.gSales.ytd > 0 || brandRow.fGP.ytd > 0) {
+        brandRows.push(brandRow);
+      }
+    }
+
+    // Process PL Brands - Food
+    for (const brand of plBrands) {
+      const brandRow = this.calculateBrandRowData(
+        foodBrandData,
+        brand,
+        {
+          year: currentYear,
+          month: filters.month,
+          businessArea: filters.businessArea,
+          channel: filters.channel,
+          customer: filters.customer,
+          brand: brand,
+          category: filters.category,
+          subCategory: filters.subCategory
+        } as DataFilters
+      );
+
+      // Always include PL brands even if they have zero values
+      brandRows.push(brandRow);
+    }
+
+    console.log(`🔍 Food Brands summary completed. Generated ${brandRows.length} rows`);
+    return brandRows;
+  }
+
+  /**
+   * Get Food Brands details data
+   * Shows food brand sub-category level performance with YTD, LY, and variance calculations
+   */
+  async getFoodBrandsDetails(filters: any): Promise<any[]> {
+    console.log('🔍 getFoodBrandsDetails called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 Processing Food Brands Details - Year: ${currentYear}, Month: ${filters.month || 'All (YTD)'}, isYTD: ${isYTD}`);
+    console.log(`🔍 Total data rows: ${data.length}`);
+
+    // For Food Brands Details, we need to be less restrictive with filtering
+    // Let's start with minimal filtering and see what data we get
+    let filteredData = data;
+    
+    // Only apply channel filter if specified and not 'All'
+    if (filters.channel && filters.channel !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Channel === filters.channel || 
+        row['SKU Channel Name'] === filters.channel
+      );
+      console.log(`🔍 After channel filter (${filters.channel}): ${filteredData.length} rows`);
+    }
+    
+    // Only apply customer filter if specified and not 'All'
+    if (filters.customer && filters.customer !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Customer === filters.customer || 
+        row['UK Customer'] === filters.customer ||
+        row['NI Customer'] === filters.customer
+      );
+      console.log(`🔍 After customer filter (${filters.customer}): ${filteredData.length} rows`);
+    }
+    
+    // Only apply business area filter if specified and not 'All'
+    if (filters.businessArea && filters.businessArea !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Business === filters.businessArea
+      );
+      console.log(`🔍 After business area filter (${filters.businessArea}): ${filteredData.length} rows`);
+    }
+    
+    console.log(`🔍 Final filtered data: ${filteredData.length} rows`);
+    
+    return this.processFoodBrandsDetailsData(filteredData, currentYear, filters);
+  }
+
+  /**
+   * Get Household Brands data
+   * Shows household brand performance with YTD, LY, and variance calculations
+   */
+  async getHouseholdBrands(filters: any): Promise<any[]> {
+    console.log('🔍 getHouseholdBrands called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 Processing Household Brands - Year: ${currentYear}, Month: ${filters.month || 'All (YTD)'}, isYTD: ${isYTD}`);
+    console.log(`🔍 Total data rows: ${data.length}`);
+
+    // For Household Brands, filter by business area = 'Household & Beauty'
+    let filteredData = data.filter((row: any) => 
+      row.Business === 'Household & Beauty'
+    );
+    console.log(`🔍 After business area filter (Household & Beauty): ${filteredData.length} rows`);
+    
+    // Only apply channel filter if specified and not 'All'
+    if (filters.channel && filters.channel !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Channel === filters.channel || 
+        row['SKU Channel Name'] === filters.channel
+      );
+      console.log(`🔍 After channel filter (${filters.channel}): ${filteredData.length} rows`);
+    }
+    
+    // Only apply customer filter if specified and not 'All'
+    if (filters.customer && filters.customer !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Customer === filters.customer || 
+        row['UK Customer'] === filters.customer ||
+        row['NI Customer'] === filters.customer
+      );
+      console.log(`🔍 After customer filter (${filters.customer}): ${filteredData.length} rows`);
+    }
+    
+    console.log(`🔍 Final filtered data: ${filteredData.length} rows`);
+    
+    return this.processHouseholdBrandsData(filteredData, currentYear, filters);
+  }
+
+  /**
+   * Process Food Brands details data with sub-category breakdown
+   */
+  private processFoodBrandsDetailsData(filteredData: any[], currentYear: number, filters: any): any[] {
+    console.log(`🔍 Processing Food Brands Details with ${filteredData.length} filtered rows`);
+    
+    // Get unique brands from the actual data
+    const uniqueBrands = [...new Set(filteredData.map((row: any) => row.Brand))].filter(brand => brand && typeof brand === 'string' && brand.trim() !== '');
+    console.log(`🔍 Found ${uniqueBrands.length} unique brands:`, uniqueBrands.slice(0, 10));
+
+    // Get unique sub-categories from the actual data
+    const uniqueSubCategories = [...new Set(filteredData.map((row: any) => row['Sub-Cat']))].filter(subCat => subCat && typeof subCat === 'string' && subCat.trim() !== '');
+    console.log(`🔍 Found ${uniqueSubCategories.length} unique sub-categories:`, uniqueSubCategories.slice(0, 10));
+
+    // Get unique products (Attribute Name) from the actual data
+    const uniqueProducts = [...new Set(filteredData.map((row: any) => row['Attribute Name']))].filter(product => product && typeof product === 'string' && product.trim() !== '');
+    console.log(`🔍 Found ${uniqueProducts.length} unique products:`, uniqueProducts.slice(0, 10));
+
+    const detailsRows = [];
+
+    // Process each brand and its sub-categories from actual data
+    for (const brand of uniqueBrands) {
+      const brandData = filteredData.filter((row: any) => row.Brand === brand);
+      const brandSubCategories = [...new Set(brandData.map((row: any) => row['Sub-Cat']))].filter(subCat => subCat && typeof subCat === 'string' && subCat.trim() !== '');
+      
+      for (const subCategory of brandSubCategories) {
+        const subCategoryData = brandData.filter((row: any) => row['Sub-Cat'] === subCategory);
+        const subCategoryProducts = [...new Set(subCategoryData.map((row: any) => row['Attribute Name']))].filter(product => product && typeof product === 'string' && product.trim() !== '');
+        
+        for (const product of subCategoryProducts) {
+          const productRow = this.calculateProductRowData(
+            filteredData,
+            brand,
+            subCategory,
+            product,
+            {
+              year: currentYear,
+              month: filters.month,
+              businessArea: filters.businessArea,
+              channel: filters.channel,
+              customer: filters.customer,
+              brand: brand,
+              category: filters.category,
+              subCategory: subCategory
+            } as DataFilters
+          );
+
+          // Only include products with some data
+          if (productRow.cases.ytd > 0 || productRow.gSales.ytd > 0 || productRow.fGP.ytd > 0) {
+            detailsRows.push(productRow);
+          }
+        }
+      }
+    }
+
+    console.log(`🔍 Food Brands Details completed. Generated ${detailsRows.length} rows`);
+    return detailsRows;
+  }
+
+  /**
+   * Calculate period data for a specific year and month
+   */
+  private calculatePeriodData(data: any[], year: number, month: string | undefined, isYTD: boolean) {
+    console.log(`🔍 calculatePeriodData: ${data.length} rows for year ${year}, month ${month || 'All'}, isYTD ${isYTD}`);
+    
+    const cases = this.reportsSumifs(data, 'Cases', {
+      year: year,
+      month: isYTD ? undefined : month,
+      businessArea: undefined,
+      channel: undefined,
+      customer: undefined,
+      brand: undefined,
+      category: undefined,
+      subCategory: undefined
+    });
+
+    const gSales = this.reportsSumifs(data, 'gSales', {
+      year: year,
+      month: isYTD ? undefined : month,
+      businessArea: undefined,
+      channel: undefined,
+      customer: undefined,
+      brand: undefined,
+      category: undefined,
+      subCategory: undefined
+    });
+
+    const fGP = this.reportsSumifs(data, 'fGP', {
+      year: year,
+      month: isYTD ? undefined : month,
+      businessArea: undefined,
+      channel: undefined,
+      customer: undefined,
+      brand: undefined,
+      category: undefined,
+      subCategory: undefined
+    });
+
+    console.log(`🔍 calculatePeriodData result: Cases=${cases}, gSales=${gSales}, fGP=${fGP}`);
+
+    return {
+      cases,
+      gSales,
+      fGP
+    };
+  }
+
+  /**
+   * Calculate product-level row data for Food Brands Details
+   */
+  private calculateProductRowData(
+    data: any[],
+    brand: string,
+    subCategory: string,
+    product: string,
+    filters: DataFilters
+  ): any {
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 calculateProductRowData: ${brand} - ${subCategory} - ${product}`);
+
+    // Filter data for this specific product
+    const productData = data.filter((row: any) => 
+      row.Brand === brand && 
+      row['Sub-Cat'] === subCategory &&
+      row['Attribute Name'] === product
+    );
+
+    console.log(`🔍 Product data rows: ${productData.length}`);
+
+    // Calculate current year data
+    const currentYearData = this.calculatePeriodData(productData, currentYear, filters.month, isYTD);
+    
+    // Calculate last year data
+    const lastYearData = this.calculatePeriodData(productData, lastYear, filters.month, isYTD);
+
+    // Calculate variances
+    const casesVariance = currentYearData.cases - lastYearData.cases;
+    const gSalesVariance = currentYearData.gSales - lastYearData.gSales;
+    const fGPVariance = currentYearData.fGP - lastYearData.fGP;
+
+    // Calculate variance percentages (using absolute value of previous year for consistent calculation)
+    const casesVariancePercent = lastYearData.cases !== 0 ? (casesVariance / Math.abs(lastYearData.cases)) * 100 : 0;
+    const gSalesVariancePercent = lastYearData.gSales !== 0 ? (gSalesVariance / Math.abs(lastYearData.gSales)) * 100 : 0;
+    const fGPVariancePercent = lastYearData.fGP !== 0 ? (fGPVariance / Math.abs(lastYearData.fGP)) * 100 : 0;
+
+    // Calculate fGP percentages
+    const currentFGPPercent = currentYearData.gSales !== 0 ? (currentYearData.fGP / currentYearData.gSales) * 100 : 0;
+    const lastFGPPercent = lastYearData.gSales !== 0 ? (lastYearData.fGP / lastYearData.gSales) * 100 : 0;
+    const fGPPercentVariance = currentFGPPercent - lastFGPPercent;
+
+    const result = {
+      brand,
+      subCategory,
+      product,
+      cases: {
+        ytd: currentYearData.cases,
+        lyVar: casesVariance,
+        lyVarPercent: casesVariancePercent
+      },
+      gSales: {
+        ytd: currentYearData.gSales,
+        lyVar: gSalesVariance,
+        lyVarPercent: gSalesVariancePercent
+      },
+      fGP: {
+        ytd: currentYearData.fGP,
+        lyVar: fGPVariance,
+        lyVarPercent: fGPVariancePercent
+      },
+      fGPPercent: {
+        ytd: currentFGPPercent,
+        lyVar: fGPPercentVariance
+      }
+    };
+
+    console.log(`🔍 Product result for ${brand}-${subCategory}-${product}:`, {
+      currentYear: { cases: currentYearData.cases, gSales: currentYearData.gSales, fGP: currentYearData.fGP },
+      lastYear: { cases: lastYearData.cases, gSales: lastYearData.gSales, fGP: lastYearData.fGP },
+      variances: { cases: casesVariance, gSales: gSalesVariance, fGP: fGPVariance },
+      variancePercents: { cases: casesVariancePercent, gSales: gSalesVariancePercent, fGP: fGPVariancePercent }
+    });
+    
+    return result;
+  }
+
+  /**
+   * Process Household Brands data
+   */
+  private processHouseholdBrandsData(filteredData: any[], currentYear: number, filters: any): any[] {
+    console.log(`🔍 Processing Household Brands with ${filteredData.length} filtered rows`);
+    
+    // Define household brands based on the screenshot
+    const householdBrands = {
+      'BV Brands - Household': [
+        'Killeen', 'Green Aware', 'Goddards', 'Irish Breeze', 'Babykind'
+      ],
+      'PL Brands - Household': [
+        'Alio', 'Centra', 'PL Minor', 'SuperValu', 'Powerforce'
+      ]
+    };
+
+    const brandRows = [];
+
+    // Process each category and its brands
+    for (const [category, brands] of Object.entries(householdBrands)) {
+      const categoryBrands = [];
+      
+      for (const brand of brands) {
+        const brandRow = this.calculateHouseholdBrandRowData(
+          filteredData,
+          brand,
+          {
+            year: currentYear,
+            month: filters.month,
+            businessArea: 'Household & Beauty',
+            channel: filters.channel,
+            customer: filters.customer,
+            brand: brand
+          } as DataFilters
+        );
+
+        // Only include brands with some data
+        if (brandRow.cases.ytd > 0 || brandRow.gSales.ytd > 0 || brandRow.fGP.ytd > 0) {
+          categoryBrands.push(brandRow);
+        }
+      }
+
+      // Calculate category totals
+      if (categoryBrands.length > 0) {
+        const categoryTotal = this.calculateHouseholdBrandTotals(categoryBrands);
+        brandRows.push(...categoryBrands);
+        brandRows.push({
+          ...categoryTotal,
+          name: `${category} Total`,
+          isTotal: true
+        });
+      }
+    }
+
+    // Calculate overall total
+    const allBrands = brandRows.filter(row => !row.isTotal);
+    if (allBrands.length > 0) {
+      const overallTotal = this.calculateHouseholdBrandTotals(allBrands);
+      brandRows.push({
+        ...overallTotal,
+        name: 'Overall Total',
+        isTotal: true
+      });
+    }
+
+    console.log(`🔍 Household Brands completed. Generated ${brandRows.length} rows`);
+    return brandRows;
+  }
+
+  /**
+   * Calculate household brand row data
+   */
+  private calculateHouseholdBrandRowData(
+    data: any[],
+    brand: string,
+    filters: DataFilters
+  ): any {
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 calculateHouseholdBrandRowData: ${brand}`);
+
+    // Filter data for this specific brand
+    const brandData = data.filter((row: any) => 
+      row.Brand === brand
+    );
+
+    console.log(`🔍 Brand data rows: ${brandData.length}`);
+
+    // Calculate current year data
+    const currentYearData = this.calculatePeriodData(brandData, currentYear, filters.month, isYTD);
+    
+    // Calculate last year data
+    const lastYearData = this.calculatePeriodData(brandData, lastYear, filters.month, isYTD);
+    
+    // Calculate variances
+    const casesVariance = currentYearData.cases - lastYearData.cases;
+    const gSalesVariance = currentYearData.gSales - lastYearData.gSales;
+    const fGPVariance = currentYearData.fGP - lastYearData.fGP;
+
+    // Calculate variance percentages (using absolute value of previous year for consistent calculation)
+    const casesVariancePercent = lastYearData.cases !== 0 ? (casesVariance / Math.abs(lastYearData.cases)) * 100 : 0;
+    const gSalesVariancePercent = lastYearData.gSales !== 0 ? (gSalesVariance / Math.abs(lastYearData.gSales)) * 100 : 0;
+    const fGPVariancePercent = lastYearData.fGP !== 0 ? (fGPVariance / Math.abs(lastYearData.fGP)) * 100 : 0;
+
+    // Calculate fGP percentages
+    const currentFGPPercent = currentYearData.gSales !== 0 ? (currentYearData.fGP / currentYearData.gSales) * 100 : 0;
+    const lastFGPPercent = lastYearData.gSales !== 0 ? (lastYearData.fGP / lastYearData.gSales) * 100 : 0;
+    const fGPPercentVariance = currentFGPPercent - lastFGPPercent;
+
+    // Calculate fGP FY24 (assuming this is the previous year's fGP)
+    const fGPFY24 = lastYearData.fGP;
+    const fGPFY24CyVLy = fGPFY24 !== 0 ? (currentYearData.fGP / fGPFY24) * 100 : 0;
+
+    const result = {
+      name: brand,
+      cases: {
+        ytd: currentYearData.cases,
+        lyVar: casesVariance,
+        lyVarPercent: casesVariancePercent
+      },
+      gSales: {
+        ytd: currentYearData.gSales,
+        lyVar: gSalesVariance,
+        lyVarPercent: gSalesVariancePercent
+      },
+      fGP: {
+        ytd: currentYearData.fGP,
+        lyVar: fGPVariance,
+        lyVarPercent: fGPVariancePercent
+      },
+      fGPPercent: {
+        ytd: currentFGPPercent,
+        lyVar: fGPPercentVariance
+      },
+      fGPFY24: {
+        ytd: fGPFY24,
+        cyVLy: fGPFY24CyVLy
+      }
+    };
+
+    console.log(`🔍 Household Brand result for ${brand}:`, {
+      currentYear: { cases: currentYearData.cases, gSales: currentYearData.gSales, fGP: currentYearData.fGP },
+      lastYear: { cases: lastYearData.cases, gSales: lastYearData.gSales, fGP: lastYearData.fGP },
+      variances: { cases: casesVariance, gSales: gSalesVariance, fGP: fGPVariance },
+      variancePercents: { cases: casesVariancePercent, gSales: gSalesVariancePercent, fGP: fGPVariancePercent }
+    });
+    
+    return result;
+  }
+
+  /**
+   * Calculate totals for household brands
+   */
+  private calculateHouseholdBrandTotals(brands: any[]): any {
+    const totals = brands.reduce((acc, brand) => ({
+      cases: {
+        ytd: acc.cases.ytd + brand.cases.ytd,
+        lyVar: acc.cases.lyVar + brand.cases.lyVar,
+        lyVarPercent: 0 // Will be calculated below
+      },
+      gSales: {
+        ytd: acc.gSales.ytd + brand.gSales.ytd,
+        lyVar: acc.gSales.lyVar + brand.gSales.lyVar,
+        lyVarPercent: 0 // Will be calculated below
+      },
+      fGP: {
+        ytd: acc.fGP.ytd + brand.fGP.ytd,
+        lyVar: acc.fGP.lyVar + brand.fGP.lyVar,
+        lyVarPercent: 0 // Will be calculated below
+      },
+      fGPPercent: {
+        ytd: 0, // Will be calculated below
+        lyVar: 0 // Will be calculated below
+      },
+      fGPFY24: {
+        ytd: acc.fGPFY24.ytd + brand.fGPFY24.ytd,
+        cyVLy: 0 // Will be calculated below
+      }
+    }), {
+      cases: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+      gSales: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, lyVar: 0, lyVarPercent: 0 },
+      fGPPercent: { ytd: 0, lyVar: 0 },
+      fGPFY24: { ytd: 0, cyVLy: 0 }
+    });
+
+    // Calculate percentages for totals
+    totals.cases.lyVarPercent = totals.cases.lyVar !== 0 && (totals.cases.ytd - totals.cases.lyVar) !== 0 
+      ? (totals.cases.lyVar / Math.abs(totals.cases.ytd - totals.cases.lyVar)) * 100 : 0;
+    
+    totals.gSales.lyVarPercent = totals.gSales.lyVar !== 0 && (totals.gSales.ytd - totals.gSales.lyVar) !== 0 
+      ? (totals.gSales.lyVar / Math.abs(totals.gSales.ytd - totals.gSales.lyVar)) * 100 : 0;
+    
+    totals.fGP.lyVarPercent = totals.fGP.lyVar !== 0 && (totals.fGP.ytd - totals.fGP.lyVar) !== 0 
+      ? (totals.fGP.lyVar / Math.abs(totals.fGP.ytd - totals.fGP.lyVar)) * 100 : 0;
+    
+    totals.fGPPercent.ytd = totals.gSales.ytd !== 0 ? (totals.fGP.ytd / totals.gSales.ytd) * 100 : 0;
+    
+    // Calculate fGP FY24 CY v LY %
+    totals.fGPFY24.cyVLy = totals.fGPFY24.ytd !== 0 ? (totals.fGP.ytd / totals.fGPFY24.ytd) * 100 : 0;
+
+    return totals;
   }
 }
 

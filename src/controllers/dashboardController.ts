@@ -751,6 +751,43 @@ export class DashboardController {
   }
 
   /**
+   * Get Sales to fGP summary data
+   * Shows detailed sales breakdown with 2025 vs 2024 comparisons
+   */
+  async getSalesToFGPSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting sales to fGP summary');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getSalesToFGPSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting sales to fGP summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SALES_TO_FGP_ERROR',
+          message: 'Failed to get sales to fGP summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
    * Get Trend by Month summary data
    * Shows monthly performance with YTD, LY, and variance calculations
    */
@@ -855,6 +892,117 @@ export class DashboardController {
         error: {
           code: 'TOTAL_BRANDS_ERROR',
           message: 'Failed to get total brands summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get Food Brands summary data
+   * Shows food brand-level performance with YTD, LY, and variance calculations
+   */
+  async getFoodBrandsSummary(req: Request, res: Response) {
+    try {
+      logger.info('Getting food brands summary');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const summaryData = await analyticsService.getFoodBrandsSummary(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: summaryData });
+    } catch (error) {
+      logger.error('Error getting food brands summary:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'FOOD_BRANDS_ERROR',
+          message: 'Failed to get food brands summary',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get Food Brands details data
+   * Shows food brand sub-category level performance with YTD, LY, and variance calculations
+   */
+  async getFoodBrandsDetails(req: Request, res: Response) {
+    try {
+      logger.info('Getting food brands details');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const detailsData = await analyticsService.getFoodBrandsDetails(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: detailsData });
+    } catch (error) {
+      logger.error('Error getting food brands details:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'FOOD_BRANDS_DETAILS_ERROR',
+          message: 'Failed to get food brands details',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * Get Household Brands data
+   * Shows household brand performance with YTD, LY, and variance calculations
+   */
+  async getHouseholdBrands(req: Request, res: Response) {
+    try {
+      logger.info('Getting household brands');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const householdData = await analyticsService.getHouseholdBrands(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: householdData });
+    } catch (error) {
+      logger.error('Error getting household brands:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'HOUSEHOLD_BRANDS_ERROR',
+          message: 'Failed to get household brands',
           details: error instanceof Error ? error.message : 'Unknown error'
         }
       });
