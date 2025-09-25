@@ -1,6 +1,20 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
+// Register module aliases for runtime path resolution
+import moduleAlias from 'module-alias';
+moduleAlias.addAliases({
+  '@': path.join(__dirname, '.'),
+  '@/controllers': path.join(__dirname, 'controllers'),
+  '@/models': path.join(__dirname, 'models'),
+  '@/routes': path.join(__dirname, 'routes'),
+  '@/services': path.join(__dirname, 'services'),
+  '@/middleware': path.join(__dirname, 'middleware'),
+  '@/utils': path.join(__dirname, 'utils'),
+  '@/types': path.join(__dirname, 'types'),
+  '@/config': path.join(__dirname, '../config')
+});
+
 // Load environment variables FIRST, before any other imports
 // Try multiple common .env locations (later loads override earlier)
 const envCandidates = [

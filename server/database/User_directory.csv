@@ -2,3 +2,5 @@ id,email,passwordHash,roles,allowedBusinessAreas,allowedChannels,allowedBrands,a
 7e3f89d3-acb9-48fc-8cc1-a5425e5545a0,sumitmishraecosoul@gmail.com,$2a$10$c.kCYdrL/DNdhDRV0j65NeT7y8yIB1Whs.h1c1gkICPBSSuRV3yUq,user,,,,,2025-08-14T10:38:30.942Z,2025-08-14T10:38:30.942Z
 40a6f24f-5b09-4c0e-9288-c19c552f48b9,sumit.mishra@ecosoulhome.com,$2a$10$tuyov6XSACU0ZkjmASAhJ.5lULhUg7IIqAo5DjYA77JGSbs2tIpD2,user,,,,,2025-08-27T11:13:39.032Z,2025-08-27T11:13:39.032Z
 95e5462f-ba5d-409b-b094-df97bc51312e,thrive@thrivebrands.ai,$2a$10$8uN2jgYd2Hb4Os.t54Lz2e/08azBUe71Oaz71ub5LoN11zgubeXR2,user,,,,,2025-08-28T09:56:10.988Z,2025-08-28T09:56:10.988Z
+724a37d7-a84c-48ef-a467-de9d504048a4,sumit@thrivebrands.ai,$2a$10$D0YjdduzkiIcYWiJwi8qSevVUmpMHsaaOXsqkrRrQQU3IQ.zIy98m,admin,,,,,2025-09-22T09:34:22.520Z,2025-09-22T09:34:22.520Z
+4489695b-235e-45a6-b268-7053de7067c5,sumitmishra@thrivebrands.ai,$2a$10$qo1NlcPkD2EAv3eokQjJkuZPFOx7U7n7DtY49ov3oHpiGX6BcV5Ei,admin,,,,,2025-09-24T10:37:06.560Z,2025-09-24T10:37:06.560Z

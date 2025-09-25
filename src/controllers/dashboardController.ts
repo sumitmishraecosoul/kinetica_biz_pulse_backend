@@ -1010,6 +1010,44 @@ export class DashboardController {
   }
 
   /**
+   * Get Household Brands details data
+   * Shows household brand sub-category level performance with YTD, LY, and variance calculations
+   * Based on Excel screenshot structure: Killeen, Green Aware, Other bags with sub-categories
+   */
+  async getHouseholdBrandsDetails(req: Request, res: Response) {
+    try {
+      logger.info('Getting household brands details');
+      console.log('🔍 Request query params:', req.query);
+      const filters = this.parseFilters(req);
+      console.log('🔍 Parsed filters:', filters);
+      const user = (req as any).user || {};
+      Object.assign(filters, {
+        allowedBusinessAreas: user.allowedBusinessAreas,
+        allowedChannels: user.allowedChannels,
+        allowedBrands: user.allowedBrands,
+        allowedCustomers: user.allowedCustomers,
+      });
+
+      const detailsData = await analyticsService.getHouseholdBrandsDetails(filters);
+      const meta = getAzureService().getLastFetchMeta();
+      res.setHeader('x-data-source', meta.source);
+      res.setHeader('x-row-count', String(meta.rowCount));
+      res.setHeader('x-last-updated', meta.lastUpdated);
+      res.json({ success: true, data: detailsData });
+    } catch (error) {
+      logger.error('Error getting household brands details:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'HOUSEHOLD_BRANDS_DETAILS_ERROR',
+          message: 'Failed to get household brands details',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
    * Parse filters from query
    */
   private parseFilters(req: Request) {

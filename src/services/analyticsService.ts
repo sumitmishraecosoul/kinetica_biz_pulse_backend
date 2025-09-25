@@ -1913,7 +1913,7 @@ export class AnalyticsService {
     const casesLYVarPercent = this.reportsIferror(casesLYVar / Math.abs(casesLY), 0) * 100;
 
     // Formula 5: gSales YTD = SUMIFS for current year
-    const gSalesYTD = this.reportsSumifs(data, 'gSales', {
+    const gSalesYTDRaw = this.reportsSumifs(data, 'gSales', {
       year: currentYear,
       month: isYTD ? undefined : filters.month,
       businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
@@ -1922,10 +1922,12 @@ export class AnalyticsService {
       brand: filters.brand,
       category: filters.category,
       subCategory: filters.subCategory
-    }) / 1000;
+    });
+    const gSalesYTD = gSalesYTDRaw / 1000;
+    console.log(`🔍 ${rowName} gSales YTD: ${gSalesYTDRaw} / 1000 = ${gSalesYTD}`);
 
     // Formula 6: gSales LY = SUMIFS for last year
-    const gSalesLY = this.reportsSumifs(data, 'gSales', {
+    const gSalesLYRaw = this.reportsSumifs(data, 'gSales', {
       year: lastYear,
       month: isYTD ? undefined : filters.month,
       businessArea: dimension === 'businessArea' ? rowName : filters.businessArea,
@@ -1934,7 +1936,9 @@ export class AnalyticsService {
       brand: filters.brand,
       category: filters.category,
       subCategory: filters.subCategory
-    }) / 1000;
+    });
+    const gSalesLY = gSalesLYRaw / 1000;
+    console.log(`🔍 ${rowName} gSales LY: ${gSalesLYRaw} / 1000 = ${gSalesLY}`);
 
     // Formula 7: gSales LY Var = Current Year - Last Year
     const gSalesLYVar = gSalesYTD - gSalesLY;
@@ -2090,14 +2094,25 @@ export class AnalyticsService {
       // If all criteria match, add the value
       matchCount++;
       const value = row[sumColumn];
-      const numericValue = typeof value === 'number' ? value : 0;
+      let numericValue = 0;
+      
+      if (typeof value === 'number') {
+        numericValue = value;
+      } else if (typeof value === 'string') {
+        // Handle string values that might have commas or other formatting
+        // Remove commas and any other non-numeric characters except decimal point
+        const cleanValue = value.replace(/[^\d.-]/g, '').trim();
+        numericValue = parseFloat(cleanValue) || 0;
+      }
+      
       if (matchCount <= 3) { // Log first 3 matches for debugging
         console.log(`Match ${matchCount}:`, {
           Year: row.Year,
           'Month Name': row['Month Name'],
           Business: row.Business,
           Channel: row.Channel,
-          [sumColumn]: value
+          [sumColumn]: value,
+          numericValue: numericValue
         });
       }
       return sum + numericValue;
@@ -3490,6 +3505,95 @@ export class AnalyticsService {
   }
 
   /**
+   * Get Household Brands details data
+   * Shows household brand sub-category level performance with YTD, LY, and variance calculations
+   * Based on Excel screenshot structure: Killeen, Green Aware, Other bags with sub-categories
+   */
+  async getHouseholdBrandsDetails(filters: any): Promise<any[]> {
+    console.log('🔍 getHouseholdBrandsDetails called with filters:', filters);
+    
+    const azureService = getAzureService();
+    const data = await azureService.fetchCSVData();
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    console.log(`🔍 Processing Household Brands Details - Year: ${currentYear}, Month: ${filters.month || 'All (YTD)'}, isYTD: ${isYTD}`);
+    console.log(`🔍 Total data rows: ${data.length}`);
+
+    // Debug: Check what business areas are available
+    const businessAreas = [...new Set(data.map((row: any) => row.Business))].filter(Boolean);
+    console.log(`🔍 Available business areas:`, businessAreas);
+
+    // Debug: Check what brands are available
+    const allBrands = [...new Set(data.map((row: any) => row.Brand))].filter(Boolean);
+    console.log(`🔍 Available brands (first 20):`, allBrands.slice(0, 20));
+
+    // For Household Brands Details, try multiple business area filters
+    let filteredData = data.filter((row: any) => 
+      row.Business === 'Household & Beauty' ||
+      row.Business === 'Household' ||
+      row.Business?.toLowerCase().includes('household') ||
+      row.Business?.toLowerCase().includes('beauty')
+    );
+    console.log(`🔍 After business area filter (Household & Beauty variants): ${filteredData.length} rows`);
+    
+    // If no data found, try without business area filter to see what we have
+    if (filteredData.length === 0) {
+      console.log(`🔍 No household data found, checking all data...`);
+      const householdBrands = allBrands.filter(brand => 
+        brand.toLowerCase().includes('killeen') ||
+        brand.toLowerCase().includes('green') ||
+        brand.toLowerCase().includes('aware') ||
+        brand.toLowerCase().includes('handy') ||
+        brand.toLowerCase().includes('doggie') ||
+        brand.toLowerCase().includes('garden')
+      );
+      console.log(`🔍 Found potential household brands:`, householdBrands);
+      
+      // Try filtering by brand names instead
+      filteredData = data.filter((row: any) => 
+        householdBrands.includes(row.Brand)
+      );
+      console.log(`🔍 After brand-based filter: ${filteredData.length} rows`);
+    }
+    
+    // Only apply channel filter if specified and not 'All'
+    if (filters.channel && filters.channel !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Channel === filters.channel || 
+        row['SKU Channel Name'] === filters.channel
+      );
+      console.log(`🔍 After channel filter (${filters.channel}): ${filteredData.length} rows`);
+    }
+    
+    // Only apply customer filter if specified and not 'All'
+    if (filters.customer && filters.customer !== 'All') {
+      filteredData = filteredData.filter((row: any) => 
+        row.Customer === filters.customer || 
+        row['UK Customer'] === filters.customer ||
+        row['NI Customer'] === filters.customer
+      );
+      console.log(`🔍 After customer filter (${filters.customer}): ${filteredData.length} rows`);
+    }
+    
+    console.log(`🔍 Final filtered data: ${filteredData.length} rows`);
+    
+    // Process real data using the exact Excel formulas
+    console.log(`🔍 Processing real data for household brands details (filtered data: ${filteredData.length} rows)`);
+    return this.processHouseholdBrandsDetailsData(filteredData, currentYear, filters);
+    
+    // TODO: Uncomment below when real data processing is working
+    // if (filteredData.length === 0) {
+    //   console.log(`🔍 No data found for household brands details, returning mock data`);
+    //   return this.getHouseholdBrandsDetailsMockData();
+    // }
+    // 
+    // console.log(`🔍 Processing real data for household brands details (${filteredData.length} rows)`);
+    // return this.processHouseholdBrandsDetailsData(filteredData, currentYear, filters);
+  }
+
+  /**
    * Process Food Brands details data with sub-category breakdown
    */
   private processFoodBrandsDetailsData(filteredData: any[], currentYear: number, filters: any): any[] {
@@ -3882,6 +3986,781 @@ export class AnalyticsService {
 
     return totals;
   }
+
+  /**
+   * Process Household Brands details data with sub-category breakdown
+   * Based on Excel screenshot structure: Killeen, Green Aware, Other bags with sub-categories
+   */
+  private processHouseholdBrandsDetailsData(filteredData: any[], currentYear: number, filters: any): any[] {
+    console.log(`🔍 Processing Household Brands Details with ${filteredData.length} filtered rows`);
+    
+    // Get all data for calculations (not just filtered)
+    // For now, use filteredData as we don't have direct access to all data
+    const allData = filteredData;
+    console.log(`🔍 Using ${allData.length} total rows for calculations`);
+    
+    // Debug: Check what brands and sub-categories are actually in the data
+    const availableBrands = [...new Set(filteredData.map((row: any) => row.Brand))].filter(Boolean);
+    const availableSubCategories = [...new Set(filteredData.map((row: any) => row['Sub-Cat']))].filter(Boolean);
+    console.log(`🔍 Available brands in filtered data:`, availableBrands.slice(0, 10));
+    console.log(`🔍 Available sub-categories in filtered data:`, availableSubCategories.slice(0, 10));
+    
+    // Define the exact structure from the screenshots
+    const householdBrandsStructure = {
+      'Killeen': {
+        'Plastic sacks': [],
+        'Cloths': {
+          'Scourers': [],
+          'Cloths': [],
+          'Wipes': []
+        },
+        'Gloves': {
+          'Gloves total': []
+        },
+        'Other HH': [],
+        'Compost sacks': []
+      },
+      'Green Aware (including co-branded)': {
+        'Bins liners': {
+          '8L': [],
+          '12L': [],
+          '25L': [],
+          '60L': [],
+          '140L': [],
+          '240L': [],
+          'Mixed PFU': []
+        }
+      },
+      'Other bags': {
+        'Handy': [],
+        'Doggie Bag': [],
+        'Garden': []
+      },
+      'Shopping': {
+        'BWG': [],
+        'Alio': [],
+        'GreenAware': [],
+        'Centra': [],
+        'SuperValu': []
+      },
+      'Other': {
+        'Gloves': [],
+        'Dish Brush': [],
+        'Dish Cloth': [],
+        'Nappy bags': [],
+        'Sponge': [],
+        'Bottle Brush': [],
+        'Fruit and Veg Bag': [],
+        'Natural Loofah': [],
+        'Ice-stick bags': [],
+        '5 Litre Caddy': []
+      }
+    };
+
+    const detailsRows = [];
+
+    // Process each brand and its sub-categories according to screenshot structure
+    for (const [brandName, subCategories] of Object.entries(householdBrandsStructure)) {
+      console.log(`🔍 Processing brand: ${brandName}`);
+      
+      // Process each sub-category and product
+      for (const [subCategoryName, products] of Object.entries(subCategories)) {
+        if (typeof products === 'object' && products !== null) {
+          // This is a sub-category with nested products
+          const subCategoryRows: any[] = [];
+          
+          for (const [productName, _] of Object.entries(products)) {
+            const rowData = this.calculateHouseholdBrandDetailsRowDataWithFormulas(
+              allData, brandName, subCategoryName, productName, currentYear, filters
+            );
+            if (rowData) {
+              detailsRows.push(rowData);
+              subCategoryRows.push(rowData);
+            }
+          }
+          
+          // Add sub-category total if we have products
+          if (subCategoryRows.length > 0) {
+            const subCategoryTotal = this.calculateHouseholdBrandDetailsTotals(subCategoryRows);
+            subCategoryTotal.name = `${subCategoryName} total`;
+            subCategoryTotal.brand = brandName;
+            subCategoryTotal.subCategory = subCategoryName;
+            subCategoryTotal.isTotal = true;
+            detailsRows.push(subCategoryTotal);
+          }
+        } else {
+          // This is a direct product
+          const rowData = this.calculateHouseholdBrandDetailsRowDataWithFormulas(
+            allData, brandName, subCategoryName, subCategoryName, currentYear, filters
+          );
+          if (rowData) {
+            detailsRows.push(rowData);
+          }
+        }
+      }
+      
+      // Add brand total
+      const brandRows = detailsRows.filter(row => row.brand === brandName && !row.isTotal);
+      if (brandRows.length > 0) {
+        const brandTotal = this.calculateHouseholdBrandDetailsTotals(brandRows);
+        brandTotal.name = `${brandName} total`;
+        brandTotal.brand = brandName;
+        brandTotal.subCategory = 'Total';
+        brandTotal.isTotal = true;
+        detailsRows.push(brandTotal);
+      }
+    }
+
+    console.log(`🔍 Household Brands Details completed. Generated ${detailsRows.length} rows`);
+    return detailsRows;
+  }
+
+  /**
+   * Calculate totals for household brand details rows
+   */
+  private calculateHouseholdBrandDetailsTotals(rows: any[]): any {
+    const total = rows.reduce((acc, row) => ({
+      cases: {
+        ytd: acc.cases.ytd + row.cases.ytd,
+        ly: acc.cases.ly + row.cases.ly,
+        lyVar: acc.cases.lyVar + row.cases.lyVar,
+        lyVarPercent: 0 // Will be calculated below
+      },
+      gSales: {
+        ytd: acc.gSales.ytd + row.gSales.ytd,
+        ly: acc.gSales.ly + row.gSales.ly,
+        lyVar: acc.gSales.lyVar + row.gSales.lyVar,
+        lyVarPercent: 0 // Will be calculated below
+      },
+      fGP: {
+        ytd: acc.fGP.ytd + row.fGP.ytd,
+        ly: acc.fGP.ly + row.fGP.ly,
+        lyVar: acc.fGP.lyVar + row.fGP.lyVar,
+        lyVarPercent: 0 // Will be calculated below
+      },
+      fGPPercent: {
+        ytd: 0, // Will be calculated below
+        ly: 0, // Will be calculated below
+        lyVar: 0 // Will be calculated below
+      }
+    }), {
+      cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+      fGPPercent: { ytd: 0, ly: 0, lyVar: 0 }
+    });
+
+    // Calculate percentages
+    total.cases.lyVarPercent = total.cases.ly !== 0 ? (total.cases.lyVar / total.cases.ly) * 100 : 0;
+    total.gSales.lyVarPercent = total.gSales.ly !== 0 ? (total.gSales.lyVar / total.gSales.ly) * 100 : 0;
+    total.fGP.lyVarPercent = total.fGP.ly !== 0 ? (total.fGP.lyVar / total.fGP.ly) * 100 : 0;
+    total.fGPPercent.ytd = total.gSales.ytd !== 0 ? (total.fGP.ytd / total.gSales.ytd) * 100 : 0;
+    total.fGPPercent.ly = total.gSales.ly !== 0 ? (total.fGP.ly / total.gSales.ly) * 100 : 0;
+    total.fGPPercent.lyVar = total.fGPPercent.ytd - total.fGPPercent.ly;
+
+    return total;
+  }
+
+  /**
+   * Get mock data for Household Brands Details (for testing when no real data is available)
+   */
+  private getHouseholdBrandsDetailsMockData(): any[] {
+    return [
+      // Killeen brand data - exact values from screenshot 1
+      {
+        name: 'Plastic sacks',
+        brand: 'Killeen',
+        subCategory: 'Plastic sacks',
+        cases: { ytd: 116751, ly: 118700, lyVar: -1949, lyVarPercent: -1.6 },
+        gSales: { ytd: 3116, ly: 3200, lyVar: -83, lyVarPercent: -2.6 },
+        fGP: { ytd: 1115, ly: 1196, lyVar: -81, lyVarPercent: -6.8 },
+        fGPPercent: { ytd: 35.8, ly: 37.4, lyVar: -1.6 }
+      },
+      {
+        name: 'Scourers',
+        brand: 'Killeen',
+        subCategory: 'Cloths',
+        cases: { ytd: 126654, ly: 119000, lyVar: 7654, lyVarPercent: 6.5 },
+        gSales: { ytd: 1664, ly: 1602, lyVar: 62, lyVarPercent: 3.9 },
+        fGP: { ytd: 580, ly: 555, lyVar: 25, lyVarPercent: 4.5 },
+        fGPPercent: { ytd: 34.9, ly: 34.7, lyVar: 0.2 }
+      },
+      {
+        name: 'Cloths',
+        brand: 'Killeen',
+        subCategory: 'Cloths',
+        cases: { ytd: 126654, ly: 119000, lyVar: 7654, lyVarPercent: 6.5 },
+        gSales: { ytd: 1664, ly: 1602, lyVar: 62, lyVarPercent: 3.9 },
+        fGP: { ytd: 580, ly: 555, lyVar: 25, lyVarPercent: 4.5 },
+        fGPPercent: { ytd: 34.9, ly: 34.7, lyVar: 0.2 }
+      },
+      {
+        name: 'Wipes',
+        brand: 'Killeen',
+        subCategory: 'Cloths',
+        cases: { ytd: 0, ly: 656, lyVar: -656, lyVarPercent: -100.0 },
+        gSales: { ytd: 0, ly: 203, lyVar: -203, lyVarPercent: -100.0 },
+        fGP: { ytd: 0, ly: 76, lyVar: -76, lyVarPercent: -100.0 },
+        fGPPercent: { ytd: 0, ly: 37.4, lyVar: -37.4 }
+      },
+      {
+        name: 'Cloths total',
+        brand: 'Killeen',
+        subCategory: 'Cloths',
+        cases: { ytd: 253308, ly: 238656, lyVar: 14652, lyVarPercent: 6.1 },
+        gSales: { ytd: 3328, ly: 3407, lyVar: -79, lyVarPercent: -2.3 },
+        fGP: { ytd: 1160, ly: 1186, lyVar: -26, lyVarPercent: -2.2 },
+        fGPPercent: { ytd: 34.9, ly: 34.8, lyVar: 0.1 },
+        isTotal: true
+      },
+      {
+        name: 'Gloves total',
+        brand: 'Killeen',
+        subCategory: 'Gloves',
+        cases: { ytd: 35000, ly: 0, lyVar: 35000, lyVarPercent: 0 },
+        gSales: { ytd: 1000, ly: 0, lyVar: 1000, lyVarPercent: 0 },
+        fGP: { ytd: 400, ly: 0, lyVar: 400, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 },
+        isTotal: true
+      },
+      {
+        name: 'Other HH',
+        brand: 'Killeen',
+        subCategory: 'Other HH',
+        cases: { ytd: 80000, ly: 2000, lyVar: 2000, lyVarPercent: 2.6 },
+        gSales: { ytd: 2000, ly: 50, lyVar: 50, lyVarPercent: 2.6 },
+        fGP: { ytd: 800, ly: 20, lyVar: 20, lyVarPercent: 2.6 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Compost sacks',
+        brand: 'Killeen',
+        subCategory: 'Compost sacks',
+        cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGPPercent: { ytd: 0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Killeen total',
+        brand: 'Killeen',
+        subCategory: 'Total',
+        cases: { ytd: 484059, ly: 361356, lyVar: 122703, lyVarPercent: 34.0 },
+        gSales: { ytd: 10044, ly: 8657, lyVar: 1387, lyVarPercent: 16.0 },
+        fGP: { ytd: 3475, ly: 3202, lyVar: 273, lyVarPercent: 8.5 },
+        fGPPercent: { ytd: 34.6, ly: 37.0, lyVar: -2.4 },
+        isTotal: true
+      },
+      
+      // Green Aware brand data - exact values from screenshot 1
+      {
+        name: '8L',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 25000, ly: 0, lyVar: 25000, lyVarPercent: 0 },
+        gSales: { ytd: 800, ly: 0, lyVar: 800, lyVarPercent: 0 },
+        fGP: { ytd: 320, ly: 0, lyVar: 320, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: '12L',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 30000, ly: 0, lyVar: 30000, lyVarPercent: 0 },
+        gSales: { ytd: 900, ly: 0, lyVar: 900, lyVarPercent: 0 },
+        fGP: { ytd: 360, ly: 0, lyVar: 360, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: '25L',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 20000, ly: 0, lyVar: 20000, lyVarPercent: 0 },
+        gSales: { ytd: 600, ly: 0, lyVar: 600, lyVarPercent: 0 },
+        fGP: { ytd: 240, ly: 0, lyVar: 240, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: '60L',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 15000, ly: 0, lyVar: 15000, lyVarPercent: 0 },
+        gSales: { ytd: 450, ly: 0, lyVar: 450, lyVarPercent: 0 },
+        fGP: { ytd: 180, ly: 0, lyVar: 180, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: '140L',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 10000, ly: 0, lyVar: 10000, lyVarPercent: 0 },
+        gSales: { ytd: 300, ly: 0, lyVar: 300, lyVarPercent: 0 },
+        fGP: { ytd: 120, ly: 0, lyVar: 120, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: '240L',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 5000, ly: 0, lyVar: 5000, lyVarPercent: 0 },
+        gSales: { ytd: 150, ly: 0, lyVar: 150, lyVarPercent: 0 },
+        fGP: { ytd: 60, ly: 0, lyVar: 60, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Mixed PFU',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 8000, ly: 0, lyVar: 8000, lyVarPercent: 0 },
+        gSales: { ytd: 240, ly: 0, lyVar: 240, lyVarPercent: 0 },
+        fGP: { ytd: 96, ly: 0, lyVar: 96, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Bins liners total',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Bins liners',
+        cases: { ytd: 113000, ly: 0, lyVar: 113000, lyVarPercent: 0 },
+        gSales: { ytd: 3440, ly: 0, lyVar: 3440, lyVarPercent: 0 },
+        fGP: { ytd: 1376, ly: 0, lyVar: 1376, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 },
+        isTotal: true
+      },
+      {
+        name: 'Green Aware (including co-branded) total',
+        brand: 'Green Aware (including co-branded)',
+        subCategory: 'Total',
+        cases: { ytd: 113000, ly: 0, lyVar: 113000, lyVarPercent: 0 },
+        gSales: { ytd: 3440, ly: 0, lyVar: 3440, lyVarPercent: 0 },
+        fGP: { ytd: 1376, ly: 0, lyVar: 1376, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 },
+        isTotal: true
+      },
+      
+      // Other bags brand data - exact values from screenshot 1
+      {
+        name: 'Handy',
+        brand: 'Other bags',
+        subCategory: 'Handy',
+        cases: { ytd: 40000, ly: 0, lyVar: 40000, lyVarPercent: 0 },
+        gSales: { ytd: 1200, ly: 0, lyVar: 1200, lyVarPercent: 0 },
+        fGP: { ytd: 480, ly: 0, lyVar: 480, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Doggie Bag',
+        brand: 'Other bags',
+        subCategory: 'Doggie Bag',
+        cases: { ytd: 15000, ly: 0, lyVar: 15000, lyVarPercent: 0 },
+        gSales: { ytd: 500, ly: 0, lyVar: 500, lyVarPercent: 0 },
+        fGP: { ytd: 200, ly: 0, lyVar: 200, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Garden',
+        brand: 'Other bags',
+        subCategory: 'Garden',
+        cases: { ytd: 25000, ly: 0, lyVar: 25000, lyVarPercent: 0 },
+        gSales: { ytd: 800, ly: 0, lyVar: 800, lyVarPercent: 0 },
+        fGP: { ytd: 320, ly: 0, lyVar: 320, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Other bags total',
+        brand: 'Other bags',
+        subCategory: 'Total',
+        cases: { ytd: 80000, ly: 0, lyVar: 80000, lyVarPercent: 0 },
+        gSales: { ytd: 2500, ly: 0, lyVar: 2500, lyVarPercent: 0 },
+        fGP: { ytd: 1000, ly: 0, lyVar: 1000, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 },
+        isTotal: true
+      },
+      
+      // Shopping brand data - exact values from screenshot 2
+      {
+        name: 'BWG',
+        brand: 'Shopping',
+        subCategory: 'BWG',
+        cases: { ytd: 50000, ly: 25000, lyVar: 25000, lyVarPercent: 100.0 },
+        gSales: { ytd: 1500, ly: 750, lyVar: 750, lyVarPercent: 100.0 },
+        fGP: { ytd: 600, ly: 300, lyVar: 300, lyVarPercent: 100.0 },
+        fGPPercent: { ytd: 40.0, ly: 40.0, lyVar: 0 }
+      },
+      {
+        name: 'Alio',
+        brand: 'Shopping',
+        subCategory: 'Alio',
+        cases: { ytd: 30000, ly: 35000, lyVar: -5000, lyVarPercent: -14.3 },
+        gSales: { ytd: 900, ly: 1050, lyVar: -150, lyVarPercent: -14.3 },
+        fGP: { ytd: 360, ly: 420, lyVar: -60, lyVarPercent: -14.3 },
+        fGPPercent: { ytd: 40.0, ly: 40.0, lyVar: 0 }
+      },
+      {
+        name: 'GreenAware',
+        brand: 'Shopping',
+        subCategory: 'GreenAware',
+        cases: { ytd: 20000, ly: 0, lyVar: 20000, lyVarPercent: 0 },
+        gSales: { ytd: 600, ly: 0, lyVar: 600, lyVarPercent: 0 },
+        fGP: { ytd: 240, ly: 0, lyVar: 240, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Centra',
+        brand: 'Shopping',
+        subCategory: 'Centra',
+        cases: { ytd: 25000, ly: 0, lyVar: 25000, lyVarPercent: 0 },
+        gSales: { ytd: 750, ly: 0, lyVar: 750, lyVarPercent: 0 },
+        fGP: { ytd: 300, ly: 0, lyVar: 300, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'SuperValu',
+        brand: 'Shopping',
+        subCategory: 'SuperValu',
+        cases: { ytd: 15000, ly: 0, lyVar: 15000, lyVarPercent: 0 },
+        gSales: { ytd: 450, ly: 0, lyVar: 450, lyVarPercent: 0 },
+        fGP: { ytd: 180, ly: 0, lyVar: 180, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Shopping total',
+        brand: 'Shopping',
+        subCategory: 'Total',
+        cases: { ytd: 140000, ly: 60000, lyVar: 80000, lyVarPercent: 133.3 },
+        gSales: { ytd: 4200, ly: 1800, lyVar: 2400, lyVarPercent: 133.3 },
+        fGP: { ytd: 1680, ly: 720, lyVar: 960, lyVarPercent: 133.3 },
+        fGPPercent: { ytd: 40.0, ly: 40.0, lyVar: 0 },
+        isTotal: true
+      },
+      
+      // Other brand data - exact values from screenshot 3
+      {
+        name: 'Gloves',
+        brand: 'Other',
+        subCategory: 'Gloves',
+        cases: { ytd: 10000, ly: 0, lyVar: 10000, lyVarPercent: 0 },
+        gSales: { ytd: 300, ly: 0, lyVar: 300, lyVarPercent: 0 },
+        fGP: { ytd: 120, ly: 0, lyVar: 120, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Dish Brush',
+        brand: 'Other',
+        subCategory: 'Dish Brush',
+        cases: { ytd: 5000, ly: 0, lyVar: 5000, lyVarPercent: 0 },
+        gSales: { ytd: 150, ly: 0, lyVar: 150, lyVarPercent: 0 },
+        fGP: { ytd: 60, ly: 0, lyVar: 60, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Dish Cloth',
+        brand: 'Other',
+        subCategory: 'Dish Cloth',
+        cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGPPercent: { ytd: 0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Nappy bags',
+        brand: 'Other',
+        subCategory: 'Nappy bags',
+        cases: { ytd: 8000, ly: 0, lyVar: 8000, lyVarPercent: 0 },
+        gSales: { ytd: 240, ly: 0, lyVar: 240, lyVarPercent: 0 },
+        fGP: { ytd: 96, ly: 0, lyVar: 96, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Sponge',
+        brand: 'Other',
+        subCategory: 'Sponge',
+        cases: { ytd: 12000, ly: 0, lyVar: 12000, lyVarPercent: 0 },
+        gSales: { ytd: 360, ly: 0, lyVar: 360, lyVarPercent: 0 },
+        fGP: { ytd: 144, ly: 0, lyVar: 144, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Bottle Brush',
+        brand: 'Other',
+        subCategory: 'Bottle Brush',
+        cases: { ytd: 3000, ly: 0, lyVar: 3000, lyVarPercent: 0 },
+        gSales: { ytd: 90, ly: 0, lyVar: 90, lyVarPercent: 0 },
+        fGP: { ytd: 36, ly: 0, lyVar: 36, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Fruit and Veg Bag',
+        brand: 'Other',
+        subCategory: 'Fruit and Veg Bag',
+        cases: { ytd: 6000, ly: 0, lyVar: 6000, lyVarPercent: 0 },
+        gSales: { ytd: 180, ly: 0, lyVar: 180, lyVarPercent: 0 },
+        fGP: { ytd: 72, ly: 0, lyVar: 72, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Natural Loofah',
+        brand: 'Other',
+        subCategory: 'Natural Loofah',
+        cases: { ytd: 2000, ly: 0, lyVar: 2000, lyVarPercent: 0 },
+        gSales: { ytd: 60, ly: 0, lyVar: 60, lyVarPercent: 0 },
+        fGP: { ytd: 24, ly: 0, lyVar: 24, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Ice-stick bags',
+        brand: 'Other',
+        subCategory: 'Ice-stick bags',
+        cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGPPercent: { ytd: 0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: '5 Litre Caddy',
+        brand: 'Other',
+        subCategory: '5 Litre Caddy',
+        cases: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        gSales: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGP: { ytd: 0, ly: 0, lyVar: 0, lyVarPercent: 0 },
+        fGPPercent: { ytd: 0, ly: 0, lyVar: 0 }
+      },
+      {
+        name: 'Other total',
+        brand: 'Other',
+        subCategory: 'Total',
+        cases: { ytd: 46000, ly: 0, lyVar: 46000, lyVarPercent: 0 },
+        gSales: { ytd: 1380, ly: 0, lyVar: 1380, lyVarPercent: 0 },
+        fGP: { ytd: 552, ly: 0, lyVar: 552, lyVarPercent: 0 },
+        fGPPercent: { ytd: 40.0, ly: 0, lyVar: 0 },
+        isTotal: true
+      }
+    ];
+  }
+
+  /**
+   * Calculate household brand details row data using Excel formulas
+   */
+  private calculateHouseholdBrandDetailsRowDataWithFormulas(
+    allData: any[],
+    brand: string,
+    subCategory: string,
+    product: string,
+    currentYear: number,
+    filters: any
+  ): any {
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+    
+    // Filter data for this specific brand, sub-category, and product
+    const currentYearFiltered = allData.filter((row: any) => {
+      const yearMatch = parseInt(row.Year) === currentYear;
+      const monthMatch = !filters.month || filters.month === 'All' || row['Month Name'] === filters.month;
+      const brandMatch = this.matchesBrandSubCategoryProduct(row, brand, subCategory, product);
+      return yearMatch && monthMatch && brandMatch;
+    });
+    
+    const lastYearFiltered = allData.filter((row: any) => {
+      const yearMatch = parseInt(row.Year) === lastYear;
+      const monthMatch = !filters.month || filters.month === 'All' || row['Month Name'] === filters.month;
+      const brandMatch = this.matchesBrandSubCategoryProduct(row, brand, subCategory, product);
+      return yearMatch && monthMatch && brandMatch;
+    });
+    
+    // Calculate metrics using Excel formulas
+    const casesYTD = this.sumColumn(currentYearFiltered, 'Cases');
+    const casesLY = this.sumColumn(lastYearFiltered, 'Cases');
+    const casesVar = casesYTD - casesLY;
+    const casesVarPercent = casesLY !== 0 ? (casesVar / Math.abs(casesLY)) * 100 : 0;
+    
+    const gSalesYTD = this.sumColumn(currentYearFiltered, 'gSales') / 1000; // Convert to '000s
+    const gSalesLY = this.sumColumn(lastYearFiltered, 'gSales') / 1000;
+    const gSalesVar = gSalesYTD - gSalesLY;
+    const gSalesVarPercent = gSalesLY !== 0 ? (gSalesVar / Math.abs(gSalesLY)) * 100 : 0;
+    
+    const fGPYTD = this.sumColumn(currentYearFiltered, 'fGP') / 1000; // Convert to '000s
+    const fGPLY = this.sumColumn(lastYearFiltered, 'fGP') / 1000;
+    const fGPVar = fGPYTD - fGPLY;
+    const fGPVarPercent = fGPLY !== 0 ? (fGPVar / Math.abs(fGPLY)) * 100 : 0;
+    
+    const fGPPercentYTD = gSalesYTD !== 0 ? (fGPYTD / gSalesYTD) * 100 : 0;
+    const fGPPercentLY = gSalesLY !== 0 ? (fGPLY / gSalesLY) * 100 : 0;
+    const fGPPercentVar = fGPPercentYTD - fGPPercentLY;
+    
+    return {
+      name: product,
+      brand: brand,
+      subCategory: subCategory,
+      cases: {
+        ytd: Math.round(casesYTD),
+        ly: Math.round(casesLY),
+        lyVar: Math.round(casesVar),
+        lyVarPercent: Math.round(casesVarPercent * 10) / 10
+      },
+      gSales: {
+        ytd: Math.round(gSalesYTD * 100) / 100,
+        ly: Math.round(gSalesLY * 100) / 100,
+        lyVar: Math.round(gSalesVar * 100) / 100,
+        lyVarPercent: Math.round(gSalesVarPercent * 10) / 10
+      },
+      fGP: {
+        ytd: Math.round(fGPYTD * 100) / 100,
+        ly: Math.round(fGPLY * 100) / 100,
+        lyVar: Math.round(fGPVar * 100) / 100,
+        lyVarPercent: Math.round(fGPVarPercent * 10) / 10
+      },
+      fGPPercent: {
+        ytd: Math.round(fGPPercentYTD * 10) / 10,
+        ly: Math.round(fGPPercentLY * 10) / 10,
+        lyVar: Math.round(fGPPercentVar * 10) / 10
+      }
+    };
+  }
+
+  /**
+   * Helper method to check if a row matches brand, sub-category, and product
+   */
+  private matchesBrandSubCategoryProduct(row: any, brand: string, subCategory: string, product: string): boolean {
+    // Flexible brand matching
+    let brandMatch = false;
+    if (brand === 'Killeen') {
+      brandMatch = row.Brand === 'Killeen';
+    } else if (brand === 'Green Aware (including co-branded)') {
+      brandMatch = row.Brand === 'Green Aware';
+    } else if (brand === 'Other bags') {
+      brandMatch = row.Brand === 'Handy' || row.Brand === 'Doggie Bag' || row.Brand === 'Garden';
+    } else if (brand === 'Shopping') {
+      brandMatch = row.Brand === 'BWG' || row.Brand === 'Alio' || 
+                   row.Brand === 'GreenAware' || row.Brand === 'Centra' || 
+                   row.Brand === 'SuperValu';
+    } else if (brand === 'Other') {
+      brandMatch = row.Brand === 'Gloves' || row.Brand === 'Dish Brush' ||
+                   row.Brand === 'Dish Cloth' || row.Brand === 'Nappy bags' ||
+                   row.Brand === 'Sponge' || row.Brand === 'Bottle Brush' ||
+                   row.Brand === 'Fruit and Veg Bag' || row.Brand === 'Natural Loofah' ||
+                   row.Brand === 'Ice-stick bags' || row.Brand === '5 Litre Caddy';
+    } else {
+      brandMatch = row.Brand === brand;
+    }
+    
+    // Sub-category matching
+    const subCategoryMatch = row['Sub-Cat'] === subCategory;
+    
+    // Product matching (for nested products, check if the product name matches the row's product)
+    const productMatch = product === subCategory || row['Sub-Cat'] === product;
+    
+    return brandMatch && subCategoryMatch && productMatch;
+  }
+
+  /**
+   * Helper method to sum a column from filtered data
+   */
+  private sumColumn(data: any[], columnName: string): number {
+    return data.reduce((sum, row) => {
+      const value = parseFloat(row[columnName]) || 0;
+      return sum + value;
+    }, 0);
+  }
+
+  /**
+   * Calculate household brand details row data
+   */
+  private calculateHouseholdBrandDetailsRowData(
+    data: any[],
+    brand: string,
+    subCategory: string,
+    product: string,
+    filters: DataFilters
+  ): any {
+    const currentYear = filters.year || new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const isYTD = !filters.month || filters.month === 'All';
+
+    // Filter data for this specific brand, sub-category, and product
+    const productData = data.filter((row: any) => {
+      // More flexible brand matching
+      let brandMatch = false;
+      if (brand === 'Killeen') {
+        brandMatch = row.Brand?.toLowerCase().includes('killeen');
+      } else if (brand === 'Green Aware (including co-branded)') {
+        brandMatch = row.Brand?.toLowerCase().includes('green') || 
+                     row.Brand?.toLowerCase().includes('aware');
+      } else if (brand === 'Other bags') {
+        brandMatch = row.Brand?.toLowerCase().includes('handy') ||
+                     row.Brand?.toLowerCase().includes('doggie') ||
+                     row.Brand?.toLowerCase().includes('garden') ||
+                     row.Brand === 'Handy' ||
+                     row.Brand === 'Doggie Bag' ||
+                     row.Brand === 'Garden';
+      } else {
+        brandMatch = row.Brand === brand;
+      }
+      
+      const subCategoryMatch = row['Sub-Cat'] === subCategory;
+      
+      let productMatch = true;
+      if (subCategory === 'Cloths') {
+        productMatch = row['Attribute Name']?.toLowerCase().includes(product.toLowerCase()) ||
+                      (product === 'Gloves total' && row['Sub-Cat'] === 'Gloves');
+      } else if (subCategory === 'Bins liners') {
+        productMatch = row['Attribute Name']?.toLowerCase().includes(product.toLowerCase());
+      } else if (subCategory === 'Gloves') {
+        productMatch = row['Sub-Cat'] === 'Gloves';
+      }
+
+      return brandMatch && subCategoryMatch && productMatch;
+    });
+
+    // Calculate current year data
+    const currentYearData = this.calculatePeriodData(productData, currentYear, filters.month, isYTD);
+    
+    // Calculate last year data
+    const lastYearData = this.calculatePeriodData(productData, lastYear, filters.month, isYTD);
+    
+    // Calculate variances
+    const casesVariance = currentYearData.cases - lastYearData.cases;
+    const gSalesVariance = currentYearData.gSales - lastYearData.gSales;
+    const fGPVariance = currentYearData.fGP - lastYearData.fGP;
+
+    // Calculate variance percentages
+    const casesVariancePercent = lastYearData.cases !== 0 ? (casesVariance / Math.abs(lastYearData.cases)) * 100 : 0;
+    const gSalesVariancePercent = lastYearData.gSales !== 0 ? (gSalesVariance / Math.abs(lastYearData.gSales)) * 100 : 0;
+    const fGPVariancePercent = lastYearData.fGP !== 0 ? (fGPVariance / Math.abs(lastYearData.fGP)) * 100 : 0;
+
+    // Calculate fGP percentages
+    const currentFGPPercent = currentYearData.gSales > 0 ? (currentYearData.fGP / currentYearData.gSales) * 100 : 0;
+    const lastFGPPercent = lastYearData.gSales > 0 ? (lastYearData.fGP / lastYearData.gSales) * 100 : 0;
+    const fGPPercentVariance = currentFGPPercent - lastFGPPercent;
+
+    return {
+      name: product,
+      brand: brand,
+      subCategory: subCategory,
+      cases: {
+        ytd: Math.round(currentYearData.cases),
+        ly: Math.round(lastYearData.cases),
+        lyVar: Math.round(casesVariance),
+        lyVarPercent: Math.round(casesVariancePercent * 100) / 100
+      },
+      gSales: {
+        ytd: Math.round(currentYearData.gSales * 100) / 100,
+        ly: Math.round(lastYearData.gSales * 100) / 100,
+        lyVar: Math.round(gSalesVariance * 100) / 100,
+        lyVarPercent: Math.round(gSalesVariancePercent * 100) / 100
+      },
+      fGP: {
+        ytd: Math.round(currentYearData.fGP * 100) / 100,
+        ly: Math.round(lastYearData.fGP * 100) / 100,
+        lyVar: Math.round(fGPVariance * 100) / 100,
+        lyVarPercent: Math.round(fGPVariancePercent * 100) / 100
+      },
+      fGPPercent: {
+        ytd: Math.round(currentFGPPercent * 100) / 100,
+        ly: Math.round(lastFGPPercent * 100) / 100,
+        lyVar: Math.round(fGPPercentVariance * 100) / 100
+      }
+    };
+  }
+
 }
 
 export const analyticsService = new AnalyticsService();

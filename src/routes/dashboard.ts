@@ -227,6 +227,13 @@ router.get('/reports/food-brands-details', validateQuery, dashboardController.ge
  */
 router.get('/reports/household-brands', validateQuery, dashboardController.getHouseholdBrands.bind(dashboardController));
 
+/**
+ * @route GET /api/v1/dashboard/reports/household-brands-details
+ * @desc Get household brands details with sub-category level performance data
+ * @access Public
+ */
+router.get('/reports/household-brands-details', validateQuery, dashboardController.getHouseholdBrandsDetails.bind(dashboardController));
+
   // Dashboard Charts endpoints
   router.post('/fgp-by-business', async (req, res) => {
     try {
