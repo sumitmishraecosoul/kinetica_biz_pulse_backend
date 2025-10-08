@@ -6,6 +6,22 @@ import { getAzureService } from './azureService';
 import { cacheService } from './cacheService';
 import { logger } from '@/utils/logger';
 
+/**
+ * Helper function to parse numbers from CSV that may contain commas
+ * Handles: "1,234.56" → 1234.56, "1234" → 1234, null/undefined → 0
+ */
+function parseNumber(value: any): number {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    // Remove commas and parse
+    const cleaned = value.replace(/,/g, '');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
 export class AnalyticsService {
   private static readonly MONTHS = [
     'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
@@ -1540,27 +1556,109 @@ export class AnalyticsService {
         logger.info('First row structure:', Object.keys(csvData[0]));
         logger.info('Sample row data:', csvData[0]);
         logger.info('Filters received:', { year, month, business, channel });
+        
+        // Check what years are in the dataset
+        const uniqueYears = [...new Set(csvData.map((row: any) => row.Year?.toString()))];
+        logger.info('Unique years in dataset:', uniqueYears);
+        
+        // Count rows per year
+        const yearCounts: any = {};
+        csvData.forEach((row: any) => {
+          const yearStr = row.Year?.toString();
+          if (yearStr) {
+            yearCounts[yearStr] = (yearCounts[yearStr] || 0) + 1;
+          }
+        });
+        logger.info('Row counts per year:', yearCounts);
+        
+        // Check 2025 data specifically
+        const data2025 = csvData.filter((row: any) => row.Year?.toString() === '2025');
+        logger.info('Total 2025 rows:', data2025.length);
+        if (data2025.length > 0) {
+          logger.info('Sample 2025 row:', data2025[0]);
+          logger.info('2025 fGP sample values:', data2025.slice(0, 5).map((r: any) => ({
+            Business: r.Business,
+            fGP: r.fGP,
+            gSales: r.gSales,
+            Year: r.Year,
+            Month: r['Month Name']
+          })));
+          
+          // Check what months 2025 has data for
+          const months2025 = [...new Set(data2025.map((r: any) => r['Month Name']))];
+          logger.info('🔍 2025 available months:', months2025);
+          
+          // Check what months were requested
+          logger.info('🔍 Requested months filter:', month);
+          
+          // Check what businesses 2025 has
+          const businesses2025 = [...new Set(data2025.map((r: any) => r.Business))];
+          logger.info('🔍 2025 available businesses:', businesses2025);
+        }
       }
+
+      // Normalize business and channel names for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        // Map 2025 business names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        
+        // Direct match
+        if (filterChannels.includes(rowChannel)) return true;
+        
+        // Flexible matching: "Grocery ROI" or "Grocery UK & NI" matches "Grocery"
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) {
+            return true;
+          }
+        }
+        
+        return false;
+      };
 
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
         const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
-        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
-        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        
+        // Normalize business name before matching
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        
+        // Use flexible channel matching
+        const channelMatch = matchesChannel(row.Channel, channel);
         
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
 
       logger.info('Filtered data count:', filteredData.length);
+      
+      // Debug: Check filtered data by year
+      const filteredYearCounts: any = {};
+      filteredData.forEach((row: any) => {
+        const yearStr = row.Year?.toString();
+        if (yearStr) {
+          filteredYearCounts[yearStr] = (filteredYearCounts[yearStr] || 0) + 1;
+        }
+      });
+      logger.info('Filtered row counts per year:', filteredYearCounts);
 
       // Group by Business Area and calculate fGP for each year
       const businessGroups = new Map();
+      let total2025fGP = 0;
+      let count2025Rows = 0;
       
       filteredData.forEach((row: any) => {
         const businessArea = row.Business;
         const year = row.Year?.toString();
-        const fGP = parseFloat(row.fGP) || 0;
+        const fGP = parseNumber(row.fGP);
 
         if (!businessGroups.has(businessArea)) {
           businessGroups.set(businessArea, { '2023': 0, '2024': 0, '2025': 0 });
@@ -1568,7 +1666,19 @@ export class AnalyticsService {
         
         if (year && businessGroups.get(businessArea).hasOwnProperty(year)) {
           businessGroups.get(businessArea)[year] += fGP;
+          
+          // Track 2025 aggregation
+          if (year === '2025') {
+            total2025fGP += fGP;
+            count2025Rows++;
+          }
         }
+      });
+      
+      logger.info('🔍 2025 Aggregation Summary:', {
+        totalRows: count2025Rows,
+        totalfGP: total2025fGP,
+        avgfGP: count2025Rows > 0 ? total2025fGP / count2025Rows : 0
       });
 
       // Convert to array format for charts
@@ -1576,6 +1686,8 @@ export class AnalyticsService {
         business,
         ...years
       }));
+      
+      logger.info('FGP by Business result:', JSON.stringify(result, null, 2));
 
       return result;
     } catch (error) {
@@ -1590,12 +1702,31 @@ export class AnalyticsService {
       const csvData = await azureService.fetchCSVData();
       const { year, month, business, channel } = filters;
 
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
         const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
-        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
-        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
         
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
@@ -1606,7 +1737,7 @@ export class AnalyticsService {
       filteredData.forEach((row: any) => {
         const channelName = row.Channel;
         const year = row.Year?.toString();
-        const fGP = parseFloat(row.fGP) || 0;
+        const fGP = parseNumber(row.fGP);
 
         if (!channelGroups.has(channelName)) {
           channelGroups.set(channelName, { '2023': 0, '2024': 0, '2025': 0 });
@@ -1636,12 +1767,31 @@ export class AnalyticsService {
       const csvData = await azureService.fetchCSVData();
       const { year, month, business, channel } = filters;
 
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
         const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
-        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
-        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
         
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
@@ -1655,7 +1805,7 @@ export class AnalyticsService {
       filteredData.forEach((row: any) => {
         const month = row['Month Name'];
         const year = row.Year?.toString();
-        const fGP = parseFloat(row.fGP) || 0;
+        const fGP = parseNumber(row.fGP);
 
         if (!monthGroups.has(month)) {
           monthGroups.set(month, { '2023': 0, '2024': 0, '2025': 0 });
@@ -1687,15 +1837,48 @@ export class AnalyticsService {
       const csvData = await azureService.fetchCSVData();
       const { year, month, business, channel } = filters;
 
+      // Debug 2025 data
+      const data2025 = csvData.filter((row: any) => row.Year?.toString() === '2025');
+      logger.info('gSales: Total 2025 rows in dataset:', data2025.length);
+      if (data2025.length > 0) {
+        logger.info('gSales: Sample 2025 data:', data2025.slice(0, 3).map((r: any) => ({
+          Business: r.Business,
+          gSales: r.gSales,
+          Year: r.Year
+        })));
+      }
+
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
         const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
-        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
-        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
         
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
+      
+      const filtered2025 = filteredData.filter((row: any) => row.Year?.toString() === '2025');
+      logger.info('gSales: Filtered 2025 rows:', filtered2025.length);
 
       // Group by Business Area and calculate gSales for each year
       const businessGroups = new Map();
@@ -1703,7 +1886,7 @@ export class AnalyticsService {
       filteredData.forEach((row: any) => {
         const businessArea = row.Business;
         const year = row.Year?.toString();
-        const gSales = parseFloat(row.gSales) || 0;
+        const gSales = parseNumber(row.gSales);
 
         if (!businessGroups.has(businessArea)) {
           businessGroups.set(businessArea, { '2023': 0, '2024': 0, '2025': 0 });
@@ -1719,6 +1902,8 @@ export class AnalyticsService {
         business,
         ...years
       }));
+      
+      logger.info('gSales by Business result:', JSON.stringify(result, null, 2));
 
       return result;
     } catch (error) {
@@ -1733,12 +1918,31 @@ export class AnalyticsService {
       const csvData = await azureService.fetchCSVData();
       const { year, month, business, channel } = filters;
 
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
         const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
-        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
-        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
         
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
@@ -1749,7 +1953,7 @@ export class AnalyticsService {
       filteredData.forEach((row: any) => {
         const channelName = row.Channel;
         const year = row.Year?.toString();
-        const gSales = parseFloat(row.gSales) || 0;
+        const gSales = parseNumber(row.gSales);
 
         if (!channelGroups.has(channelName)) {
           channelGroups.set(channelName, { '2023': 0, '2024': 0, '2025': 0 });
@@ -1779,12 +1983,31 @@ export class AnalyticsService {
       const csvData = await azureService.fetchCSVData();
       const { year, month, business, channel } = filters;
 
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
         const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
-        const businessMatch = !business || business.length === 0 || business.includes(row.Business);
-        const channelMatch = !channel || channel.length === 0 || channel.includes(row.Channel);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
         
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
@@ -1798,7 +2021,7 @@ export class AnalyticsService {
       filteredData.forEach((row: any) => {
         const month = row['Month Name'];
         const year = row.Year?.toString();
-        const gSales = parseFloat(row.gSales) || 0;
+        const gSales = parseNumber(row.gSales);
 
         if (!monthGroups.has(month)) {
           monthGroups.set(month, { '2023': 0, '2024': 0, '2025': 0 });
@@ -2753,9 +2976,9 @@ export class AnalyticsService {
       if (filters.category && filters.category !== 'All' && row.Category !== filters.category) continue;
       if (filters.subCategory && filters.subCategory !== 'All' && row['Sub-Cat'] !== filters.subCategory) continue;
 
-      const cases = parseFloat(row.Cases) || 0;
-      const gSales = parseFloat(row.gSales) || 0;
-      const fGP = parseFloat(row.fGP) || 0;
+      const cases = parseNumber(row.Cases);
+      const gSales = parseNumber(row.gSales);
+      const fGP = parseNumber(row.fGP);
 
       if (year === currentYear) {
         // Current year data
@@ -3106,7 +3329,7 @@ export class AnalyticsService {
       if (filters.category && filters.category !== 'All' && row.Category !== filters.category) continue;
       if (filters.subCategory && filters.subCategory !== 'All' && row['Sub-Cat'] !== filters.subCategory) continue;
 
-      const value = parseFloat(row[item.field]) || 0;
+      const value = parseNumber(row[item.field]);
       total += value;
       count++;
     }
@@ -4656,8 +4879,7 @@ export class AnalyticsService {
    */
   private sumColumn(data: any[], columnName: string): number {
     return data.reduce((sum, row) => {
-      const value = parseFloat(row[columnName]) || 0;
-      return sum + value;
+      return sum + parseNumber(row[columnName]);
     }, 0);
   }
 
