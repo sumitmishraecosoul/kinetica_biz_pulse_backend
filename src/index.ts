@@ -56,7 +56,7 @@ import { authMiddleware } from '@/middleware/auth';
 import { getAzureService } from '@/services/azureService';
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Security middleware
