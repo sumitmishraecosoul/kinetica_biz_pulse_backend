@@ -1604,7 +1604,26 @@ export class AnalyticsService {
           'Household': 'Household & Beauty',
           'Brillo & KMPL': 'Brillo, Goddards & KMPL'
         };
-        return mapping[name] || name;
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Business name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
+      };
+
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
       };
 
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
@@ -1656,7 +1675,8 @@ export class AnalyticsService {
       let count2025Rows = 0;
       
       filteredData.forEach((row: any) => {
-        const businessArea = row.Business;
+        // Use normalized business name for grouping to ensure consistency
+        const businessArea = normalizeBusinessName(row.Business);
         const year = row.Year?.toString();
         const fGP = parseNumber(row.fGP);
 
@@ -1711,6 +1731,21 @@ export class AnalyticsService {
         return mapping[name] || name;
       };
 
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
+      };
+
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
         if (!filterChannels || filterChannels.length === 0) return true;
         if (filterChannels.includes(rowChannel)) return true;
@@ -1752,7 +1787,8 @@ export class AnalyticsService {
       const channelGroups = new Map();
       
       filteredData.forEach((row: any) => {
-        const channelName = row.Channel;
+        // Use normalized channel name for grouping to ensure consistency
+        const channelName = normalizeChannelName(row.Channel);
         const year = row.Year?.toString();
         const fGP = parseNumber(row.fGP);
 
@@ -1791,6 +1827,21 @@ export class AnalyticsService {
           'Brillo & KMPL': 'Brillo, Goddards & KMPL'
         };
         return mapping[name] || name;
+      };
+
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
       };
 
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
@@ -1891,6 +1942,21 @@ export class AnalyticsService {
         return mapping[name] || name;
       };
 
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
+      };
+
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
         if (!filterChannels || filterChannels.length === 0) return true;
         if (filterChannels.includes(rowChannel)) return true;
@@ -1935,7 +2001,8 @@ export class AnalyticsService {
       const businessGroups = new Map();
       
       filteredData.forEach((row: any) => {
-        const businessArea = row.Business;
+        // Use normalized business name for grouping to ensure consistency
+        const businessArea = normalizeBusinessName(row.Business);
         const year = row.Year?.toString();
         const gSales = parseNumber(row.gSales);
 
@@ -1976,6 +2043,21 @@ export class AnalyticsService {
           'Brillo & KMPL': 'Brillo, Goddards & KMPL'
         };
         return mapping[name] || name;
+      };
+
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
       };
 
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
@@ -2019,7 +2101,8 @@ export class AnalyticsService {
       const channelGroups = new Map();
       
       filteredData.forEach((row: any) => {
-        const channelName = row.Channel;
+        // Use normalized channel name for grouping to ensure consistency
+        const channelName = normalizeChannelName(row.Channel);
         const year = row.Year?.toString();
         const gSales = parseNumber(row.gSales);
 
@@ -2058,6 +2141,21 @@ export class AnalyticsService {
           'Brillo & KMPL': 'Brillo, Goddards & KMPL'
         };
         return mapping[name] || name;
+      };
+
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
       };
 
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
@@ -2150,6 +2248,21 @@ export class AnalyticsService {
         return mapping[name] || name;
       };
 
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
+      };
+
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
         if (!filterChannels || filterChannels.length === 0) return true;
         if (filterChannels.includes(rowChannel)) return true;
@@ -2191,7 +2304,8 @@ export class AnalyticsService {
       const businessGroups = new Map();
       
       filteredData.forEach((row: any) => {
-        const businessName = row.Business;
+        // Use normalized business name for grouping to ensure consistency
+        const businessName = normalizeBusinessName(row.Business);
         const year = row.Year?.toString();
         const cases = parseNumber(row.Cases);
 
@@ -2236,6 +2350,21 @@ export class AnalyticsService {
         return mapping[name] || name;
       };
 
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
+      };
+
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
         if (!filterChannels || filterChannels.length === 0) return true;
         if (filterChannels.includes(rowChannel)) return true;
@@ -2277,7 +2406,8 @@ export class AnalyticsService {
       const channelGroups = new Map();
       
       filteredData.forEach((row: any) => {
-        const channelName = row.Channel;
+        // Use normalized channel name for grouping to ensure consistency
+        const channelName = normalizeChannelName(row.Channel);
         const year = row.Year?.toString();
         const cases = parseNumber(row.Cases);
 
@@ -2320,6 +2450,21 @@ export class AnalyticsService {
           'Brillo & KMPL': 'Brillo, Goddards & KMPL'
         };
         return mapping[name] || name;
+      };
+
+      const normalizeChannelName = (name: string): string => {
+        // Map 2025 channel names to match filter values
+        const mapping: { [key: string]: string } = {
+          'Grocery ROI': 'Grocery',
+          'Grocery UK & NI': 'Grocery',
+          'Wholesale ROI': 'Wholesale',
+          'Wholesale UK & NI': 'Wholesale'
+        };
+        const normalized = mapping[name] || name;
+        if (normalized !== name) {
+          logger.info(`Channel name normalized: "${name}" → "${normalized}"`);
+        }
+        return normalized;
       };
 
       const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
