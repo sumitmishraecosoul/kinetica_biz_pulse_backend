@@ -1720,6 +1720,24 @@ export class AnalyticsService {
         return false;
       };
 
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
@@ -1727,7 +1745,6 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
 
@@ -1785,6 +1802,24 @@ export class AnalyticsService {
         return false;
       };
 
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
@@ -1792,7 +1827,6 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
 
@@ -1866,6 +1900,24 @@ export class AnalyticsService {
         return false;
       };
 
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
@@ -1873,7 +1925,6 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
       
@@ -1936,6 +1987,24 @@ export class AnalyticsService {
         return false;
       };
 
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
@@ -1943,7 +2012,6 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
 
@@ -2001,6 +2069,24 @@ export class AnalyticsService {
         return false;
       };
 
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
       // Filter data based on selected filters
       let filteredData = csvData.filter((row: any) => {
         const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
@@ -2008,7 +2094,6 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        
         return yearMatch && monthMatch && businessMatch && channelMatch;
       });
 
@@ -2043,6 +2128,268 @@ export class AnalyticsService {
       return result;
     } catch (error) {
       logger.error('Error getting gSales Monthly Trend:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Cases by Business Unit
+   */
+  async getCasesByBusiness(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel, brand, category, customer } = filters;
+
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Group by Business and Year, calculate Cases
+      const businessGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const businessName = row.Business;
+        const year = row.Year?.toString();
+        const cases = parseNumber(row.Cases);
+
+        if (!businessGroups.has(businessName)) {
+          businessGroups.set(businessName, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && businessGroups.get(businessName).hasOwnProperty(year)) {
+          businessGroups.get(businessName)[year] += cases;
+        }
+      });
+
+      // Convert to array format for charts
+      const result = Array.from(businessGroups.entries()).map(([business, years]) => ({
+        business,
+        ...years
+      }));
+
+      logger.info('Cases by Business result:', result);
+      return result;
+    } catch (error) {
+      logger.error('Error getting Cases by Business:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Cases by Channel
+   */
+  async getCasesByChannel(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel, brand, category, customer } = filters;
+
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Group by Channel and Year, calculate Cases
+      const channelGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const channelName = row.Channel;
+        const year = row.Year?.toString();
+        const cases = parseNumber(row.Cases);
+
+        if (!channelGroups.has(channelName)) {
+          channelGroups.set(channelName, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && channelGroups.get(channelName).hasOwnProperty(year)) {
+          channelGroups.get(channelName)[year] += cases;
+        }
+      });
+
+      // Convert to array format for charts
+      const result = Array.from(channelGroups.entries()).map(([channel, years]) => ({
+        channel,
+        ...years
+      }));
+
+      logger.info('Cases by Channel result:', result);
+      return result;
+    } catch (error) {
+      logger.error('Error getting Cases by Channel:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Cases Monthly Trend
+   */
+  async getCasesMonthlyTrend(filters: any): Promise<any[]> {
+    try {
+      const azureService = getAzureService();
+      const csvData = await azureService.fetchCSVData();
+      const { year, month, business, channel, brand, category, customer } = filters;
+
+      // Helper functions for flexible matching
+      const normalizeBusinessName = (name: string): string => {
+        const mapping: { [key: string]: string } = {
+          'Household': 'Household & Beauty',
+          'Brillo & KMPL': 'Brillo, Goddards & KMPL'
+        };
+        return mapping[name] || name;
+      };
+
+      const matchesChannel = (rowChannel: string, filterChannels: string[]): boolean => {
+        if (!filterChannels || filterChannels.length === 0) return true;
+        if (filterChannels.includes(rowChannel)) return true;
+        for (const filterChannel of filterChannels) {
+          if (rowChannel.startsWith(filterChannel + ' ')) return true;
+        }
+        return false;
+      };
+
+      // Helper function for brand matching
+      const matchesBrand = (rowBrand: string, filterBrands: string[]): boolean => {
+        if (!filterBrands || filterBrands.length === 0) return true;
+        return filterBrands.includes(rowBrand);
+      };
+
+      // Helper function for category matching
+      const matchesCategory = (rowCategory: string, filterCategories: string[]): boolean => {
+        if (!filterCategories || filterCategories.length === 0) return true;
+        return filterCategories.includes(rowCategory);
+      };
+
+      // Helper function for customer matching
+      const matchesCustomer = (rowCustomer: string, filterCustomers: string[]): boolean => {
+        if (!filterCustomers || filterCustomers.length === 0) return true;
+        return filterCustomers.includes(rowCustomer);
+      };
+
+      // Filter data based on selected filters
+      let filteredData = csvData.filter((row: any) => {
+        const yearMatch = !year || year.length === 0 || year.includes(row.Year?.toString());
+        const monthMatch = !month || month.length === 0 || month.includes(row['Month Name']);
+        const normalizedBusiness = normalizeBusinessName(row.Business);
+        const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
+        const channelMatch = matchesChannel(row.Channel, channel);
+        return yearMatch && monthMatch && businessMatch && channelMatch;
+      });
+
+      // Define month order
+      const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      // Group by Month and calculate Cases for each year
+      const monthGroups = new Map();
+      
+      filteredData.forEach((row: any) => {
+        const month = row['Month Name'];
+        const year = row.Year?.toString();
+        const cases = parseNumber(row.Cases);
+
+        if (!monthGroups.has(month)) {
+          monthGroups.set(month, { '2023': 0, '2024': 0, '2025': 0 });
+        }
+        
+        if (year && monthGroups.get(month).hasOwnProperty(year)) {
+          monthGroups.get(month)[year] += cases;
+        }
+      });
+
+      // Convert to array format for charts and sort by month order
+      const result = monthOrder
+        .filter(month => monthGroups.has(month))
+        .map(month => ({
+          month,
+          ...monthGroups.get(month)
+        }));
+
+      return result;
+    } catch (error) {
+      logger.error('Error getting Cases Monthly Trend:', error);
       throw error;
     }
   }

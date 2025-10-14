@@ -301,6 +301,39 @@ router.get('/reports/household-brands-details', validateQuery, dashboardControll
     }
   });
 
+  router.post('/cases-by-business', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getCasesByBusiness(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in Cases by Business endpoint:', error);
+      res.status(500).json({ error: 'Failed to get Cases by Business data' });
+    }
+  });
+
+  router.post('/cases-by-channel', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getCasesByChannel(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in Cases by Channel endpoint:', error);
+      res.status(500).json({ error: 'Failed to get Cases by Channel data' });
+    }
+  });
+
+  router.post('/cases-monthly-trend', async (req, res) => {
+    try {
+      const filters = req.body;
+      const data = await analyticsService.getCasesMonthlyTrend(filters);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error in Cases Monthly Trend endpoint:', error);
+      res.status(500).json({ error: 'Failed to get Cases Monthly Trend data' });
+    }
+  });
+
 export default router;
 
 
