@@ -1512,11 +1512,42 @@ export class AnalyticsService {
         filteredData = allData.filter(row => row.Business === filters.businessArea);
       }
 
-      // Get unique values from filtered data
+      // Helper function to normalize business names
+      const normalizeBusinessName = (businessName: string): string => {
+        if (!businessName) return businessName;
+        
+        // Map variations to standard names
+        if (businessName.includes('Brillo') && businessName.includes('KMPL')) {
+          return 'Brillo, Goddards & KMPL';
+        }
+        if (businessName === 'Household') {
+          return 'Household & Beauty';
+        }
+        return businessName;
+      };
+
+      // Helper function to normalize channel names
+      const normalizeChannelName = (channelName: string): string => {
+        if (!channelName) return channelName;
+        
+        // Map variations to standard names
+        if (channelName === 'Grocery ROI' || channelName === 'Grocery UK & NI') {
+          return 'Grocery';
+        }
+        if (channelName === 'Wholesale ROI' || channelName === 'Wholesale UK & NI') {
+          return 'Wholesale';
+        }
+        return channelName;
+      };
+
+      // Get unique values from filtered data with normalization
       const years = [...new Set(filteredData.map(row => row.Year))].sort((a, b) => b - a);
       const months = [...new Set(filteredData.map(row => row['Month Name']).filter(Boolean))];
-      const businessAreas = [...new Set(filteredData.map(row => row.Business).filter(Boolean))].sort();
-      const channels = [...new Set(filteredData.map(row => row.Channel).filter(Boolean))].sort();
+      const businessAreas = [...new Set(filteredData.map(row => normalizeBusinessName(row.Business)).filter(Boolean))].sort();
+      const channels = [...new Set(filteredData.map(row => normalizeChannelName(row.Channel)).filter(Boolean))].sort();
+      const brands = [...new Set(filteredData.map(row => row.Brand).filter(Boolean))].sort();
+      const categories = [...new Set(filteredData.map(row => row.Category).filter(Boolean))].sort();
+      const customers = [...new Set(filteredData.map(row => row.Customer).filter(Boolean))].sort();
 
       // Sort months in chronological order
       const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1530,7 +1561,10 @@ export class AnalyticsService {
         years,
         months: sortedMonths,
         businessAreas,
-        channels
+        channels,
+        brands,
+        categories,
+        customers
       };
 
     } catch (error) {
@@ -1539,7 +1573,10 @@ export class AnalyticsService {
         years: [],
         months: [],
         businessAreas: [],
-        channels: []
+        channels: [],
+        brands: [],
+        categories: [],
+        customers: []
       };
     }
   }

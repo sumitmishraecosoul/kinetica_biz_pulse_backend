@@ -358,6 +358,7 @@ export class DashboardController {
       });
     }
   }
+  
 
   /**
    * Get risk analysis
