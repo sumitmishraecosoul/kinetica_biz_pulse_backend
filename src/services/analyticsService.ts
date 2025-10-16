@@ -1586,7 +1586,7 @@ export class AnalyticsService {
     try {
       const azureService = getAzureService();
       const csvData = await azureService.fetchCSVData();
-      const { year, month, business, channel } = filters;
+      const { year, month, business, channel, brand, category, customer } = filters;
 
       // Debug: Log the first few rows to see the actual structure
       if (csvData.length > 0) {
@@ -1691,7 +1691,12 @@ export class AnalyticsService {
         // Use flexible channel matching
         const channelMatch = matchesChannel(row.Channel, channel);
         
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       logger.info('Filtered data count:', filteredData.length);
@@ -1757,7 +1762,7 @@ export class AnalyticsService {
     try {
       const azureService = getAzureService();
       const csvData = await azureService.fetchCSVData();
-      const { year, month, business, channel } = filters;
+      const { year, month, business, channel, brand, category, customer } = filters;
 
       // Helper functions for flexible matching
       const normalizeBusinessName = (name: string): string => {
@@ -1817,7 +1822,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Group by Channel and calculate fGP for each year
@@ -1855,7 +1865,7 @@ export class AnalyticsService {
     try {
       const azureService = getAzureService();
       const csvData = await azureService.fetchCSVData();
-      const { year, month, business, channel } = filters;
+      const { year, month, business, channel, brand, category, customer } = filters;
 
       // Helper functions for flexible matching
       const normalizeBusinessName = (name: string): string => {
@@ -1915,7 +1925,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Define month order
@@ -1957,7 +1972,7 @@ export class AnalyticsService {
     try {
       const azureService = getAzureService();
       const csvData = await azureService.fetchCSVData();
-      const { year, month, business, channel } = filters;
+      const { year, month, business, channel, brand, category, customer } = filters;
 
       // Debug 2025 data
       const data2025 = csvData.filter((row: any) => row.Year?.toString() === '2025');
@@ -2028,7 +2043,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
       
       const filtered2025 = filteredData.filter((row: any) => row.Year?.toString() === '2025');
@@ -2071,7 +2091,7 @@ export class AnalyticsService {
     try {
       const azureService = getAzureService();
       const csvData = await azureService.fetchCSVData();
-      const { year, month, business, channel } = filters;
+      const { year, month, business, channel, brand, category, customer } = filters;
 
       // Helper functions for flexible matching
       const normalizeBusinessName = (name: string): string => {
@@ -2131,7 +2151,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Group by Channel and calculate gSales for each year
@@ -2169,7 +2194,7 @@ export class AnalyticsService {
     try {
       const azureService = getAzureService();
       const csvData = await azureService.fetchCSVData();
-      const { year, month, business, channel } = filters;
+      const { year, month, business, channel, brand, category, customer } = filters;
 
       // Helper functions for flexible matching
       const normalizeBusinessName = (name: string): string => {
@@ -2229,7 +2254,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Define month order
@@ -2334,7 +2364,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Group by Business and Year, calculate Cases
@@ -2436,7 +2471,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Group by Channel and Year, calculate Cases
@@ -2538,7 +2578,12 @@ export class AnalyticsService {
         const normalizedBusiness = normalizeBusinessName(row.Business);
         const businessMatch = !business || business.length === 0 || business.includes(normalizedBusiness);
         const channelMatch = matchesChannel(row.Channel, channel);
-        return yearMatch && monthMatch && businessMatch && channelMatch;
+        // Add brand, category, and customer filtering
+        const brandMatch = !brand || brand.length === 0 || brand.includes(row.Brand);
+        const categoryMatch = !category || category.length === 0 || category.includes(row.Category);
+        const customerMatch = !customer || customer.length === 0 || customer.includes(row.Customer);
+        
+        return yearMatch && monthMatch && businessMatch && channelMatch && brandMatch && categoryMatch && customerMatch;
       });
 
       // Define month order

@@ -56,5 +56,26 @@ pids/
 *.pid
 *.log
 
-# TypeScript (optional)
+# TypeScript build info
 *.tsbuildinfo
+
+# Azure storage files (if any)
+AZURE_STORAGE_CONNECTION_STRING
+AccountKey
+DefaultEndpointsProtocol
+
+# CSV data files (if sensitive)
+*.csv
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS specific
+.AppleDouble
+.LSOverride
+._*
+
+# Cache directories
+.cache/
+.temp/
